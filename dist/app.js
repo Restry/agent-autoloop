@@ -1,3 +1,5 @@
+import {topologyKey} from './layout.js';
+import {startHub,stateNames,terminal,isBusy,isConnected,ruleAction,action,showWhy,openBoard,message,setSceneActions,escapeHTML} from './hub.js';
 import * as T from 'three';
 import {roundedRoute} from './routes.js';
 import {OrbitControls} from './vendor/OrbitControls.js';
@@ -11,19 +13,20 @@ import {SSAOPass} from 'three/addons/postprocessing/SSAOPass.js';
 import {OutputPass} from 'three/addons/postprocessing/OutputPass.js';
 
 const $=s=>document.querySelector(s), canvas=$('#scene');
-const agentDefinitions=[
+const brandTemplates=[
  {key:'codex',name:'Codex',icon:'codex',color:'#b2adff',face:'#6671e4',edge:'#3a46a5',x:17,z:10,busy:'正在构建'},
  {key:'claude',name:'Claude',icon:'claude',color:'#efbd87',face:'#d3916e',edge:'#925c40',x:16,z:-9,busy:'正在规划'},
  {key:'copilot',name:'GitHub Copilot',icon:'copilot',color:'#8bdbdf',face:'#74bcc8',edge:'#306574',x:25,z:0,busy:'正在验证'}
 ];
+const agentDefinitions=[];
 const scene=new T.Scene(); scene.background=new T.Color('#dce7d9');scene.fog=new T.FogExp2('#dce7d9',.009);
 let renderer;
 try {renderer=new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});}catch(e){$('#loading').innerHTML='<strong>此设备暂时无法启动三维场景</strong><span>请启用浏览器的图形加速后重试。</span>';throw e;}
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.22;
 const camera=new T.OrthographicCamera(-28,28,20,-20,.1,180);
 const defaultTarget=new T.Vector3(0,0,0), defaultPosition=new T.Vector3(17,33,46);
-camera.position.copy(defaultPosition);camera.lookAt(defaultTarget);
-const controls=new OrbitControls(camera,canvas);controls.target.copy(defaultTarget);controls.enableDamping=true;controls.dampingFactor=.055;controls.minPolarAngle=.4;controls.maxPolarAngle=1.12;controls.minZoom=.72;controls.maxZoom=4.5;controls.enablePan=true;controls.maxTargetRadius=80;controls.autoRotate=false;
+camera.far=2000;camera.position.copy(defaultPosition);camera.lookAt(defaultTarget);
+const controls=new OrbitControls(camera,canvas);controls.target.copy(defaultTarget);controls.enableDamping=true;controls.dampingFactor=.055;controls.minPolarAngle=.4;controls.maxPolarAngle=1.12;controls.minZoom=.12;controls.maxZoom=4.5;controls.enablePan=true;controls.maxTargetRadius=1000;controls.autoRotate=false;
 const composer=new EffectComposer(renderer);composer.addPass(new RenderPass(scene,camera));const aoPass=new SSAOPass(scene,camera,innerWidth,innerHeight,16);aoPass.kernelRadius=.48;aoPass.minDistance=.001;aoPass.maxDistance=.035;aoPass.ssaoMaterial.defines.PERSPECTIVE_CAMERA=0;aoPass.depthRenderMaterial.defines.PERSPECTIVE_CAMERA=0;composer.addPass(aoPass);const bloom=new UnrealBloomPass(new T.Vector2(innerWidth,innerHeight),.38,.55,.86);composer.addPass(bloom);composer.addPass(new OutputPass());
 const hemi=new T.HemisphereLight('#fffdf4','#a8b797',2.6);scene.add(hemi);
 const moon=new T.DirectionalLight('#becce9',2.6);moon.position.set(-16,32,20);moon.castShadow=true;moon.shadow.mapSize.set(2048,2048);moon.shadow.radius=3;Object.assign(moon.shadow.camera,{left:-33,right:33,top:30,bottom:-30,near:1,far:100});moon.shadow.normalBias=.035;moon.shadow.bias=-.00015;scene.add(moon);
@@ -68,28 +71,33 @@ function placeModel(name,x,y,z,targetSize=1,dimension='width',parent=scene,dynam
 
 const claudeReference=await loader.loadAsync('./icons/claude-reference.glb');
 const emblemLibrary=new Map(),svgLoader=new SVGLoader();
-try{await Promise.all(agentDefinitions.map(async def=>{const response=await fetch('./icons/'+def.icon+'.svg');if(!response.ok)throw new Error(def.name+' 图标加载失败');const data=svgLoader.parse(await response.text());const vb=(data.xml.getAttribute('viewBox')||'0 0 24 24').split(/[ ,]+/).map(Number),size=vb[2];const geometries=[];for(const path of data.paths){for(const shape of SVGLoader.createShapes(path)){const geometry=new T.ExtrudeGeometry(shape,{depth:size*.1,bevelEnabled:true,bevelThickness:size*.006,bevelSize:size*.0045,bevelSegments:3,curveSegments:20,steps:1});geometries.push(geometry);}}emblemLibrary.set(def.key,geometries);}));}catch(error){$('#loading').innerHTML='<strong>Agent 图标加载失败</strong><span>请刷新页面重试。</span>';throw error;}
+try{await Promise.all(brandTemplates.map(async def=>{const response=await fetch('./icons/'+def.icon+'.svg');if(!response.ok)throw new Error(def.name+' 图标加载失败');const data=svgLoader.parse(await response.text());const vb=(data.xml.getAttribute('viewBox')||'0 0 24 24').split(/[ ,]+/).map(Number),size=vb[2];const geometries=[];for(const path of data.paths){for(const shape of SVGLoader.createShapes(path)){const geometry=new T.ExtrudeGeometry(shape,{depth:size*.1,bevelEnabled:true,bevelThickness:size*.006,bevelSize:size*.0045,bevelSegments:3,curveSegments:20,steps:1});geometries.push(geometry);}}emblemLibrary.set(def.key,geometries);}));}catch(error){$('#loading').innerHTML='<strong>Agent 图标加载失败</strong><span>请刷新页面重试。</span>';throw error;}
 function makeEmblem(def,parent){
  const pivot=new T.Group();parent.add(pivot);
- if(def.key==='claude'){
+ if(def.icon==='claude'){
   const model=claudeReference.scene.clone(true);const bounds=new T.Box3().setFromObject(model),center=bounds.getCenter(new T.Vector3()),size=bounds.getSize(new T.Vector3());
   model.position.sub(center);const holder=new T.Group();holder.add(model);holder.scale.setScalar(2.7/Math.max(size.x,size.y));pivot.add(holder);
   model.traverse(o=>{if(o.isMesh){o.userData.static=false;o.castShadow=true;o.receiveShadow=true;o.material=o.material.clone();if(o.material.name.startsWith('White')){o.material.emissive.set('#fff8e8');o.material.emissiveIntensity=.02;pivot.userData.frontMaterial=o.material;}}});
   pivot.userData.baseYaw=.08;
+ }else if(def.generic){
+  const front=new T.MeshStandardMaterial({color:'#fffaf1',roughness:.4,emissive:'#fff8e8',emissiveIntensity:.02});
+  box(2.3,2.3,.4,new T.MeshStandardMaterial({color:def.face,roughness:.43}),0,0,0,pivot,true);
+  const symbol=mesh(new T.OctahedronGeometry(.75),front,0,0,.5,pivot,true);symbol.rotation.z=.35;
+  pivot.userData.frontMaterial=front;pivot.userData.baseYaw=.28;
  }else{
   // 采用参考模型的圆角方形徽章结构：厚底座和白色立体品牌标志。
   const shape=new T.Shape(),h=1.2,r=.4;shape.moveTo(-h+r,-h);shape.lineTo(h-r,-h);shape.quadraticCurveTo(h,-h,h,-h+r);shape.lineTo(h,h-r);shape.quadraticCurveTo(h,h,h-r,h);shape.lineTo(-h+r,h);shape.quadraticCurveTo(-h,h,-h,h-r);shape.lineTo(-h,-h+r);shape.quadraticCurveTo(-h,-h,-h+r,-h);
   const baseGeometry=new T.ExtrudeGeometry(shape,{depth:.38,bevelEnabled:true,bevelThickness:.12,bevelSize:.12,bevelSegments:5,curveSegments:16,steps:1});baseGeometry.translate(0,0,-.19);
   const face=new T.MeshStandardMaterial({color:def.face,roughness:.43,metalness:.12});const side=new T.MeshStandardMaterial({color:def.edge,roughness:.45,metalness:.1});mesh(baseGeometry,[face,side],0,0,0,pivot,true);
   const logo=new T.Group();pivot.add(logo);const front=new T.MeshStandardMaterial({color:'#fffaf1',roughness:.4,metalness:.08,emissive:'#fff8e8',emissiveIntensity:.02}),edge=new T.MeshStandardMaterial({color:'#e3e2d7',roughness:.43,metalness:.12});
-  emblemLibrary.get(def.key).forEach(geometry=>mesh(geometry,[front,edge],0,0,0,logo,true));const bounds=new T.Box3().setFromObject(logo),center=bounds.getCenter(new T.Vector3()),size=bounds.getSize(new T.Vector3());logo.children.forEach(part=>part.position.sub(center));const scale=2/Math.max(size.x,size.y);logo.scale.set(scale,-scale,scale);logo.position.z=.39;pivot.userData.frontMaterial=front;pivot.userData.baseYaw=.28;
+  emblemLibrary.get(def.icon).forEach(geometry=>mesh(geometry,[front,edge],0,0,0,logo,true));const bounds=new T.Box3().setFromObject(logo),center=bounds.getCenter(new T.Vector3()),size=bounds.getSize(new T.Vector3());logo.children.forEach(part=>part.position.sub(center));const scale=2/Math.max(size.x,size.y);logo.scale.set(scale,-scale,scale);logo.position.z=.39;pivot.userData.frontMaterial=front;pivot.userData.baseYaw=.28;
  }
  pivot.position.y=4.25;pivot.rotation.set(-.22,pivot.userData.baseYaw,0);return pivot;
 }
 
 // 地形、道路与微缩景观。
 const pondShape=new T.Shape();pondShape.moveTo(-2.9,-.9);pondShape.bezierCurveTo(-3.5,.1,-2.8,1.8,-1.2,2.1);pondShape.bezierCurveTo(0,2.5,2.8,2.1,3,.8);pondShape.bezierCurveTo(3.2,-.2,2,-.5,1.5,-1.3);pondShape.bezierCurveTo(.8,-2.3,-1.8,-2.2,-2.9,-.9);pondShape.closePath();
-const terrainShape=new T.Shape([new T.Vector2(-90,-90),new T.Vector2(90,-90),new T.Vector2(90,90),new T.Vector2(-90,90)]);
+const terrainShape=new T.Shape([new T.Vector2(-1000,-1000),new T.Vector2(1000,-1000),new T.Vector2(1000,1000),new T.Vector2(-1000,1000)]);
 const pondHole=new T.Path(pondShape.getPoints(90).map(v=>new T.Vector2(v.x*1.16+5,v.y*1.16-10)));terrainShape.holes.push(pondHole);
 const ground=mesh(new T.ShapeGeometry(terrainShape),grass,0,-.1,0);ground.rotation.x=-Math.PI/2;ground.castShadow=false;const groundUV=ground.geometry.attributes.uv;for(let i=0;i<groundUV.count;i++)groundUV.setXY(i,(groundUV.getX(i)+90)/180,(groundUV.getY(i)+90)/180);
 function road(points,width=1.7){const curve=new T.CatmullRomCurve3(points.map(([x,z])=>point(x,.01,z)),false,'catmullrom',.15);const a=mesh(new T.TubeGeometry(curve,80,width/2,8,false),asphalt);a.scale.y=.05;a.castShadow=false;return curve;}
@@ -130,24 +138,8 @@ const reeds=mat('reeds','#56774a',.9),reedTips=mat('reedTips','#756241',.95);
 for(const [x,z] of [[2.1,8.5],[6.6,7.7],[8.05,9.2]]){for(let j=0;j<7;j++){const dx=(rand()-.5)*.38,dz=(rand()-.5)*.38,h=.42+rand()*.45;beam(point(x+dx,0,z+dz),point(x+dx+.08,h,z+dz-.04),.012,reeds);cyl(.025,.025,.13,reedTips,x+dx+.08,h+.04,z+dz-.04,scene,false,6);}}
 for(const [x,z,scale] of [[2.25,8.45,.48],[7.2,7.9,.4],[8.35,9.4,.35]]){const rock=mesh(new T.IcosahedronGeometry(1,1),pondStoneMaterials[0],x,.06,z);rock.scale.set(scale,.14,scale*.7);rock.rotation.y=rand()*3;}
 
-const projects=[
-{name:'曙光',sub:'家庭影像与生活记录',task:'构建相册时间线',x:-18,z:-9,agent:0,type:0},
-{name:'门神',sub:'个人 Agent 凭据管理',task:'整理凭据管理流程',x:-5,z:-9,agent:1,type:1},
-{name:'Remotastic',sub:'遥控器与桌面交互',task:'完善按钮映射',x:-19,z:7,agent:0,type:2},
-{name:'GemFlow',sub:'业务流程与协作空间',task:'检查库存同步流程',x:-5,z:7,agent:1,type:3},
-{name:'灵感花园',sub:'设计参考与视觉探索',task:'归档新的设计灵感',x:-19,z:15,agent:1,type:4},
-{name:'实验室',sub:'新想法从这里开始',task:'搭建交互原型',x:-5,z:15,agent:0,type:5}
-];
-const workDefinitions=[
- [['梳理相册交互','整理照片浏览、筛选和时间线的交互要求。'],['构建相册时间线','实现按日期浏览照片，并连接相册视图。'],['验证照片加载','检查图片加载、日期切换和空状态。']],
- [['梳理凭据权限','整理凭据的使用范围和授权规则。'],['实现凭据检索','实现凭据搜索和筛选入口。'],['验证授权流程','检查授权提示与凭据访问流程。']],
- [['设计按键映射','整理遥控器按键和操作的对应关系。'],['完善按钮映射','实现按键配置和操作切换。'],['检查遥控器交互','验证单击、长按和配置保存。']],
- [['梳理库存流程','整理库存变动与同步规则。'],['实现库存同步','完成库存同步逻辑和异常处理。'],['核对同步结果','检查数据一致性及重复执行。']],
- [['筛选设计参考','整理新参考，标记可以使用的视觉方向。'],['生成灵感页面','把筛选后的内容排成可浏览的页面。'],['检查素材出处','核对素材来源和页面可读性。']],
- [['定义原型范围','明确本轮需要验证的交互和场景。'],['搭建交互原型','把选定的交互制作成可运行原型。'],['验证操作路径','检查关键按钮、导航和任务状态。']]
-];
-const areaNames=['设计室','开发室','验证室'],bayOffsets=[-1.7,0,1.7];
-projects.forEach((p,i)=>{p.nextArea=1;p.workspaces=workDefinitions[i].map((d,j)=>({name:areaNames[j],title:d[0],description:d[1],agent:j===0?1:j===1?0:2,latest:null,anchor:point(p.x+1.83,.55,p.z+bayOffsets[j])}));});
+const projects=[];
+const bayOffsets=[-1.7,0,1.7];
 const pickables=[],workspacePickables=[],labels=[];
 
 function label(text,x,y,z,kind='',action){const el=document.createElement('button');el.className='world-label '+kind;el.innerHTML=text;$('#labels').append(el);if(action)el.addEventListener('click',action);labels.push({el,p:point(x,y,z)});return el;}
@@ -158,11 +150,11 @@ for(let x=-2.5;x<.9;x+=.4){for(let z=-2.2;z<2.5;z+=.5){if(Math.abs(x+.6)<1.5&&Ma
 box(6.6,.3,.12,pale,0,.3,-2.85,group);box(.12,.3,5.8,pale,-3.25,.3,0,group);box(.12,.3,5.8,pale,3.25,.3,0,group);box(2.3,.3,.12,pale,-2.1,.3,2.85,group);box(2.3,.3,.12,pale,2.1,.3,2.85,group);
 placeModel('hedge',-.2,.2,-2.5,5.8,'width',group).scale.y*=.42;
 const houses=['family','split','cottage','townhouse','ranch','family'];
-placeModel(houses[index],-.8,.24,-.45,3.35,'width',group);
+placeModel(houses[index%houses.length],-.8,.24,-.45,3.35,'width',group);
 placeModel('planter',-.8,.2,1.8,1.25,'width',group);
 placeModel('shrubHD',-2.7,.2,.9,.62,'width',group);
 placeModel('flowers',-2.55,.2,-1.4,.85,'width',group);
-// 主楼旁的三个独立工作区：规划、执行、交付。
+// 每页显示三个规则工作区，位置不代表业务类别。
 for(let i=0;i<3;i++)box(1.2,.08*(3-i),.25,pale,-.65,.17+.04*(3-i),1.02+i*.25,group);
 const bayZ=[-1.7,0,1.7];
 bayZ.forEach((z,j)=>{
@@ -178,7 +170,7 @@ bayZ.forEach((z,j)=>{
  box(.46,.015,.4,black,3.04,.565,z,group);
  const indicatorMaterial=softWarm.clone();const indicator=ball(.075,indicatorMaterial,2.75,.54,z+.58,group,true);p.workspaces[j].indicator=indicator;
  const areaProxy=box(2.1,1.65,1.5,new T.MeshBasicMaterial({visible:false}),p.x+1.83,1,p.z+z,scene,true);areaProxy.visible=false;areaProxy.castShadow=false;areaProxy.userData={project:index,area:j};workspacePickables.push(areaProxy);
- const card=document.createElement('button');card.className='room-card';card.hidden=true;card.innerHTML='<span class=room-top><span>0'+(j+1)+' · '+areaNames[j]+'</span><span class=room-agent>'+agentDefinitions[p.workspaces[j].agent].name+'</span></span><strong>'+p.workspaces[j].title+'</strong><span class=room-state>待派送</span>';card.onclick=()=>selectWorkArea(index,j);$('#workspaces').append(card);p.workspaces[j].card=card;
+ const card=document.createElement('button');card.className='room-card';card.hidden=true;card.innerHTML='<span class=room-top><span>0'+(j+1)+' · '+'工作区'+'</span><span class=room-agent>'+'未分配'+'</span></span><strong>'+p.workspaces[j].title+'</strong><span class=room-state>空工作区</span>';card.onclick=()=>selectWorkArea(index,j);$('#workspaces').append(card);p.workspaces[j].card=card;
  if(j===0){
   placeModel('shed',1.83,.33,z,1.32,'width',group);
  }else if(j===1){
@@ -194,9 +186,9 @@ placeModel('planter',-2.7,.2,2.05,.65,'width',group);
 const roadZ=p.z<0?-9:p.z<10?9:15;road([[p.x,p.z+3],[p.x,p.z+3.8],[-11,roadZ]],.65);
 lamp(p.x-3,p.z+3,1.25);lamp(p.x+3,p.z+3,1.25);
 const proxy=box(6.7,h+2,5.8,new T.MeshBasicMaterial({visible:false}),p.x,(h+2)/2,p.z,scene,true);proxy.visible=false;proxy.castShadow=false;proxy.receiveShadow=false;proxy.userData.project=index;pickables.push(proxy);
-p.label=label('<i></i>'+p.name+'<span class="count">'+(index%3+2)+'</span>',p.x,.3,p.z+3.45,'',()=>selectProject(index));p.anchor=point(p.x,1,p.z);return group;
+p.label=label('<i></i>'+escapeHTML(p.name)+'<span class="count">'+0+'</span>',p.x,.3,p.z+3.45,'',()=>selectProject(index));p.anchor=point(p.x,1,p.z);return group;
 }
-projects.forEach(villa);
+
 
 // 圆形中台：石阶、环形工作舱、玻璃穹顶与悬浮核心。
 const hub=point(3.6,0,.1);
@@ -227,9 +219,9 @@ for(let i=0;i<2;i++){const a=torus(2.05+i*.22,.038,orbitMaterial,0,0,0,rings,tru
 glow(x,4.1,z,color,3,.32);groundGlow(x,z,color,10,.12);
 for(let i=0;i<8;i++){const a=i/8*Math.PI*2;cyl(.07,.1,.55,trim,Math.cos(a)*3.65,.76,Math.sin(a)*3.65,root);ball(.09,m,Math.cos(a)*3.65,1.08,Math.sin(a)*3.65,root);}
 const light=new T.PointLight(color,25,11,2);light.position.set(x,3,z);scene.add(light);
-label(name,x,7.0,z,'agent',()=>focusAgent(index));agents[index]={...def,name,x,z,rings,emblem,columnMat,light,root};
+const tag=label(escapeHTML(name),x,7.0,z,'agent',()=>focusAgent(index));agents[index]={...def,name,x,z,rings,emblem,columnMat,light,root,tag};
 }
-agentDefinitions.forEach((def,i)=>makeAgent(def.name,def.x,def.z,def.color,[violet,amber,cyan][i],i));
+
 
 // 开放式双向传送带。带面、边框和滚筒均可见；纸箱在带面上行走。
 const beltCanvas=document.createElement('canvas');beltCanvas.width=128;beltCanvas.height=64;
@@ -251,7 +243,7 @@ return c;}
 const trunkX=-9.1,feedZ=.3,beltY=.58;
 pipeline([[trunkX,beltY,-6],[trunkX,beltY,20]]);
 const feed=pipeline([[trunkX,beltY,feedZ],[-5,beltY,feedZ],[hub.x-2.65,.85,feedZ]]);
-projects.forEach((p,i)=>{
+function routeProject(p){
 const px=p.x+3.5,joinZ=p.z+4.2;
 // 院落右侧的小传送带，连接三个工作区。
 pipeline([[px,beltY,p.z-1.8],[px,beltY,p.z+1.7]]);
@@ -259,76 +251,107 @@ const branch=pipeline([[px,beltY,p.z+1.7],[px,beltY,joinZ],[trunkX,beltY,joinZ]]
 const trunkPart=new T.LineCurve3(point(trunkX,beltY,joinZ),point(trunkX,beltY,feedZ));
 const route=new T.CurvePath();route.add(branch);route.add(trunkPart);route.add(feed);p.route=route;p.workspaces.forEach((area,j)=>{const r=new T.CurvePath();r.add(new T.LineCurve3(point(p.x+2.95,beltY,p.z+bayOffsets[j]),point(px,beltY,p.z+bayOffsets[j])));if(j<2)r.add(new T.LineCurve3(point(px,beltY,p.z+bayOffsets[j]),point(px,beltY,p.z+1.7)));route.curves.forEach(c=>r.add(c));area.route=r;});
 box(1.1,.1,1.1,trim,trunkX,beltY-.06,joinZ);box(.95,.025,.95,black,trunkX,beltY,joinZ);
-});
-agents.forEach((a,i)=>{const startZ=i===0?1.4:i===1?-1.4:0,turnZ=i===0?3:i===1?-3:0;a.route=pipeline([[hub.x+2.7,.85,startZ],[8.5,.7,turnZ],[a.x-6.4,.7,a.z],[a.x-2.1,1.3,a.z]],2);const walkPoints=a.route.getSpacedPoints(Math.ceil(a.route.getLength()*12)).map(v=>new T.Vector3(v.x,.012,v.z));beltStrip(new T.CatmullRomCurve3(walkPoints,false,'centripetal'),0,1.45,asphalt);});
+if(joinZ>20||joinZ< -6)pipeline([[trunkX,beltY,joinZ],[trunkX,beltY,joinZ>20?20:-6]]);
+}
+
+function routeAgent(a,i){
+ if(i<3){const startZ=a.z<0?-1.4:a.z>0?1.4:0,turnZ=a.z<0?-3:a.z>0?3:0;a.route=pipeline([[hub.x+2.7,.85,startZ],[8.5,.7,turnZ],[a.x-6.4,.7,a.z],[a.x-2.1,1.3,a.z]],2);}
+ else a.route=pipeline([[hub.x+2.7,.85,0],[10,.7,0],[10,.7,a.z],[a.x-2.1,1.3,a.z]],2);
+}
+
 // 草地上的零星微光。
 const fireCount=75,firePositions=new Float32Array(fireCount*3);for(let i=0;i<fireCount;i++){firePositions[i*3]=(rand()-.5)*48;firePositions[i*3+1]=.3+rand()*3;firePositions[i*3+2]=(rand()-.5)*32;}const fireGeo=new T.BufferGeometry();fireGeo.setAttribute('position',new T.BufferAttribute(firePositions,3));const fireflies=new T.Points(fireGeo,new T.PointsMaterial({color:'#dbdaa5',size:.055,transparent:true,opacity:.55,depthWrite:false,blending:T.AdditiveBlending}));scene.add(fireflies);
 
 const selectionFrame=new T.LineLoop(new T.BufferGeometry().setFromPoints([point(-1,0,-.76),point(1,0,-.76),point(1,0,.76),point(-1,0,.76)]),new T.LineBasicMaterial({color:'#d69a45',depthTest:false}));selectionFrame.renderOrder=20;selectionFrame.visible=false;scene.add(selectionFrame);
 
 // 合并静态建筑，减少渲染调用；动画对象独立保留。
+function batchStatic(objects=[scene]){
 scene.updateMatrixWorld(true);const batches=new Map(),remove=[];
-scene.traverse(o=>{if(o.isMesh && o.userData.static && !Array.isArray(o.material)){const key=o.material.uuid+'-'+o.castShadow+'-'+o.receiveShadow+'-'+Object.keys(o.geometry.attributes).sort().join(',');if(!batches.has(key))batches.set(key,{m:o.material,cast:o.castShadow,receive:o.receiveShadow,geos:[]});let geo=o.geometry.clone().applyMatrix4(o.matrixWorld);if(geo.index)geo=geo.toNonIndexed();for(const k of Object.keys(geo.attributes))if(!['position','normal','uv','color'].includes(k))geo.deleteAttribute(k);batches.get(key).geos.push(geo);remove.push(o);}});
+objects.forEach(root=>root.traverse(o=>{if(o.isMesh && o.userData.static && !Array.isArray(o.material)){const key=o.material.uuid+'-'+o.castShadow+'-'+o.receiveShadow+'-'+Object.keys(o.geometry.attributes).sort().join(',');if(!batches.has(key))batches.set(key,{m:o.material,cast:o.castShadow,receive:o.receiveShadow,geos:[]});let geo=o.geometry.clone().applyMatrix4(o.matrixWorld);if(geo.index)geo=geo.toNonIndexed();for(const k of Object.keys(geo.attributes))if(!['position','normal','uv','color'].includes(k))geo.deleteAttribute(k);batches.get(key).geos.push(geo);remove.push(o);}}));
 for(const b of batches.values()){const geo=mergeGeometries(b.geos,false);if(geo){const o=new T.Mesh(geo,b.m);o.castShadow=b.cast;o.receiveShadow=b.receive;scene.add(o);}b.geos.forEach(g=>g.dispose());}remove.forEach(o=>o.removeFromParent());
 
-let running=!matchMedia('(prefers-reduced-motion: reduce)').matches,sim=0,completed=0,selected=-1,selectedArea=1,lastDispatch=0,autoIndex=0,focusedTask=null,inspectedTask=null,cameraTween=null,taskSequence=0;
-const tasks=[];
-const phaseNames=['前往中台','中台分配中','送往 Agent','Agent 执行中','结果返回中台','送回工作区','已交付'];
-function areaState(area){const t=area.latest;return t?phaseNames[t.stage]:'待派送';}
-function createParcel(color){const g=placeModel('box',0,0,0,.7,'width',scene,true);const tag=new T.MeshBasicMaterial({color});const label=box(.22,.12,.014,tag,0,.38,.52,g,true);label.userData.ownedMaterial=true;return g;}
-function dispatch(i,manual=false,areaIndex=null){
- const p=projects[i];let j=areaIndex??p.nextArea;const existing=tasks.find(t=>t.project===i&&t.area===j&&!t.done);
- if(existing){if(manual){selectParcel(existing);toast('这项任务正在进行。');}return existing;}
- if(tasks.filter(t=>!t.done).length>=9){if(manual)toast('当前任务较多，请等一项任务完成。');return null;}
- const area=p.workspaces[j];p.nextArea=(j+1)%3;
- const task={project:i,area:j,agent:area.agent,title:area.title,description:area.description,route:area.route,start:sim,stage:0,package:createParcel(agents[area.agent].color),id:++taskSequence,done:false};
- const hit=document.createElement('button');hit.className='parcel-hit';hit.setAttribute('aria-label','查看包裹：'+p.name+' · '+task.title+' · '+agents[task.agent].name);hit.title='查看任务';hit.innerHTML='<span></span>';hit.onclick=e=>{e.stopPropagation();selectParcel(task);};$('#parcels').append(hit);task.hit=hit;
- area.latest=task;tasks.push(task);if(manual||!focusedTask||focusedTask.done)focusedTask=task;
- if(manual){toast(area.name+'的任务已发出');selectParcel(task);}if(focusedTask===task)updateActivity(task);return task;
 }
-function phaseFor(age){if(age<5.5)return 0;if(age<7)return 1;if(age<11.5)return 2;if(age<19.5)return 3;if(age<24)return 4;if(age<29.5)return 5;return 6;}
+batchStatic();
+
+let running=!matchMedia('(prefers-reduced-motion: reduce)').matches,sim=0,completed=0,selected=-1,selectedArea=1,focusedTask=null,inspectedTask=null,cameraTween=null;
+const tasks=[];
+const isExecuting=state=>state==='running'||state==='claimed';
+let hubState=null;
+function areaState(area){if(!hubState)return '正在连接';if(!area.line)return '空工作区';const totals=area.line.totals||{};if(area.line.paused)return '规则已暂停'+(totals.running?' · '+totals.running+' 轮仍在执行':'');if(totals.running)return '执行中 '+totals.running+(totals.queued?' · 排队 '+totals.queued:'');if(totals.queued)return '排队中 '+totals.queued;if(totals.retrying)return '等待重试 '+totals.retrying;if(totals.unknown)return '状态未知 '+totals.unknown;return area.latest?(stateNames[area.latest.run.state]||area.latest.run.state):'等待触发';}
+function createParcel(color){const g=placeModel('box',0,0,0,.7,'width',scene,true);const tag=new T.MeshBasicMaterial({color});const label=box(.22,.12,.014,tag,0,.38,.52,g,true);label.userData.ownedMaterial=true;return g;}
 function positionOn(obj,c,t,reverse=false){obj.visible=true;const u=T.MathUtils.clamp(reverse?1-t:t,0,1),p=c.getPointAt(u);obj.position.copy(p);const dir=c.getTangentAt(u);obj.position.addScaledVector(point(-dir.z,0,dir.x).normalize(),reverse?-.235:.235);obj.position.y+=.03;obj.rotation.y=Math.atan2(dir.x,dir.z)+(reverse?Math.PI:0);}
+let liveMapping={},townTopology=null,townObjects=[];
+const baseLabelCount=labels.length,baseNightCount=nightEffects.length;
+const sharedGeometries=new Set([boxGeo,sphereGeo,cylGeo,treeGeo]),sharedMaterials=new Set(Object.values(materials));
+function rememberShared(root){root.traverse(o=>{if(o.geometry)sharedGeometries.add(o.geometry);if(o.material)for(const m of Array.isArray(o.material)?o.material:[o.material])sharedMaterials.add(m);});}
+rememberShared(scene);rememberShared(claudeReference.scene);for(const model of modelLibrary.values())rememberShared(model.root);for(const gs of emblemLibrary.values())gs.forEach(g=>sharedGeometries.add(g));
+function disposeObjects(objects){const gs=new Set(),ms=new Set();for(const root of objects){root.traverse(o=>{if(o.geometry&&!sharedGeometries.has(o.geometry))gs.add(o.geometry);if(o.material)for(const m of Array.isArray(o.material)?o.material:[o.material])if(!sharedMaterials.has(m))ms.add(m);});root.removeFromParent();}gs.forEach(g=>g.dispose());ms.forEach(m=>m.dispose());}
+function clearTown(){for(const t of tasks){disposeObjects([t.package]);t.hit.remove();}tasks.length=0;focusedTask=null;closeParcel();closeProject();disposeObjects(townObjects);townObjects=[];for(const entry of labels.splice(baseLabelCount))entry.el.remove();nightEffects.splice(baseNightCount);document.querySelectorAll('.room-card').forEach(el=>el.remove());$('.agents').querySelectorAll('[data-agent]').forEach(el=>el.remove());projects.length=0;agents.length=0;agentDefinitions.length=0;pickables.length=0;workspacePickables.length=0;}
+function newProject(name){const n=projects.length,slots=[[-18,-9],[-5,-9],[-19,7],[-5,7],[-19,15],[-5,15]],pos=slots[n]||[-32-Math.floor((n-6)/3)*13,-9+((n-6)%3)*12];const p={name,x:pos[0],z:pos[1],type:n%6,page:0,rules:[]};p.workspaces=bayOffsets.map((_,j)=>({name:'空工作区',title:'空工作区',description:'此位置没有绑定 AutoLoop 规则。',agent:-1,latest:null,line:null,anchor:point(p.x+1.83,.55,p.z+bayOffsets[j])}));projects.push(p);villa(p,n);routeProject(p);return p;}
+function ensureAgent(record){const index=agents.length,slots=[[16,-9],[17,10],[29,0]],pos=slots[index]||[40+Math.floor((index-3)/3)*12,-12+((index-3)%3)*13];const template=brandTemplates.find(d=>d.key===record.use)||brandTemplates.find(d=>d.key===record.id);const color=template?.color||new T.Color().setHSL((index*.173)%1,.3,.62).getStyle();const def={...(template||{generic:true,color,face:color,edge:'#506b65'}),key:record.id,name:record.name||record.id,x:pos[0],z:pos[1]};agentDefinitions.push(def);makeAgent(def.name,def.x,def.z,def.color,new T.MeshStandardMaterial({color:def.color,emissive:def.color,emissiveIntensity:.3}),index);routeAgent(agents[index],index);agents[index].columnMat.blending=daylight?T.NormalBlending:T.AdditiveBlending;}
+function rebuildTown(data){const before=new Set(scene.children);for(const name of [...new Set(Object.values(liveMapping).map(m=>m.group))].sort((a,b)=>a.localeCompare(b)))newProject(name);for(const record of [...data.agents].sort((a,b)=>a.id.localeCompare(b.id)))ensureAgent(record);batchStatic(scene.children.filter(o=>!before.has(o)));townObjects=scene.children.filter(o=>!before.has(o));nightEffects.slice(baseNightCount).forEach(o=>o.visible=!daylight);}
+function updateAgentList(data){const parent=$('.agents');for(let i=0;i<agents.length;i++){const a=agents[i];let row=parent.querySelector('[data-agent="'+i+'"]');if(!row){row=document.createElement('button');row.dataset.agent=i;const mark=document.createElement(a.icon?'img':'span');if(a.icon){mark.className='agent-logo';mark.src='icons/'+a.icon+'.svg';mark.alt='';}else{mark.className='agent-generic';mark.textContent='◇';}row.append(mark);const wrap=document.createElement('div');wrap.append(document.createElement('strong'),document.createElement('span'));row.append(wrap);const count=document.createElement('span');count.className='agent-signal';row.append(count);parent.append(row);}row.onclick=()=>focusAgent(i);row.querySelector('strong').textContent=a.name;const live=data.agents.find(x=>x.id===a.key),online=live?.online;a.live=live;a.name=live?.name||a.key;a.tag.textContent=a.name;row.querySelector('strong').textContent=a.name;row.querySelector('div span').textContent=!live?'未配置':!online?'离线':live.totals.running?'执行中':'在线 · 空闲';row.querySelector('.agent-signal').textContent=live?(live.totals.running||0)+(live.totals.queued||0):'—';a.columnMat.uniforms.uPower.value=online?(live.totals.running?1.5:.35):.05;a.light.intensity=online?(daylight?2:20):0;}}
+function showProjectPage(p){
+ const maxPage=Math.max(0,...p.rules.map(r=>Math.floor(liveMapping[r.name].area/3)));p.page=Math.min(p.page||0,maxPage);
+ p.workspaces.forEach((a,j)=>{a.line=null;a.latest=null;a.logicalArea=p.page*3+j;a.name='空工作区';a.title='空工作区';a.agent=-1;a.description='此位置没有绑定 AutoLoop 规则。';a.card.querySelector('.room-top>span').textContent='工作区 '+(a.logicalArea+1);});
+ for(const line of p.rules){const m=liveMapping[line.name];if(Math.floor(m.area/3)!==p.page)continue;const a=p.workspaces[m.area%3];a.line=line;a.name=line.name;a.title=line.name;a.agent=agents.findIndex(x=>x.key===line.agent);a.description=line.every?'定时：'+line.every+(line.next?' · 下次 '+new Date(line.next).toLocaleString('zh-CN',{timeZone:hubState.timezone}):''):'事件：'+(line.types||[]).join('、');a.latest=tasks.filter(t=>t.run.rule===line.name).sort((a,b)=>Number(a.done)-Number(b.done)||b.id-a.id)[0]||null;}
+ p.workspaces.forEach(a=>{a.card.querySelector('strong').textContent=a.title;a.card.querySelector('.room-agent').textContent=a.line?hubState.agents.find(x=>x.id===a.line.agent)?.name||a.line.agent:'未分配';});
+}
+function rebuildWorkspacePicker(){const select=$('#workspace-select');select.replaceChildren();const p=projects[selected];for(const line of p.rules){const m=liveMapping[line.name],option=document.createElement('option');option.value=line.name;option.textContent=line.name;option.selected=p.workspaces[selectedArea]?.line?.name===line.name;select.append(option);}p.workspaces.forEach((area,j)=>{if(area.line)return;const option=document.createElement('option');option.value='';option.dataset.slot=String(j);option.textContent='空工作区（位置 '+((area.logicalArea??j)+1)+'）';option.selected=j===selectedArea;select.append(option);});select.disabled=false;$('#workspace-count').textContent=p.rules.length+' 条规则 · 第 '+((p.page||0)+1)+' 组工作区';}
+function locateRule(name){const m=liveMapping[name];if(!m)return;const index=projects.findIndex(p=>p.name===m.group);if(index<0)return;projects[index].page=Math.floor(m.area/3);showProjectPage(projects[index]);selectProject(index);selectWorkArea(index,m.area%3);}
+function syncHub(data,mapping){
+ const nextTopology=topologyKey(data),rebuild=nextTopology!==townTopology,selectedRule=projects[selected]?.workspaces[selectedArea]?.line?.name,selectedGroup=projects[selected]?.name,selectedRun=inspectedTask?.id;
+ hubState=data;liveMapping=mapping;completed=data.totals.doneToday||0;$('#completed').textContent=completed+' 项今日完成';
+ if(rebuild){clearTown();rebuildTown(data);townTopology=nextTopology;}
+ projects.forEach(p=>{p.rules=data.lines.filter(l=>l.group===p.name);p.page=p.page||0;});
+ const retained=new Set();
+ for(const run of data.runs){const m=mapping[run.rule],pi=m?projects.findIndex(p=>p.name===m.group):-1,area=pi>=0?projects[pi].workspaces[m.area%3]:null;let t=tasks.find(t=>t.id===run.id);if(!t){t={id:run.id,package:createParcel(agents.find(a=>a.key===run.agent)?.color||'#aab4af'),hit:document.createElement('button'),stage:0,start:sim};t.hit.className='parcel-hit';t.hit.innerHTML='<span></span>';t.hit.onclick=()=>selectParcel(t);$('#parcels').append(t.hit);tasks.push(t);}const previous=t.run?.state;t.project=pi;t.area=m?m.area%3:-1;t.logicalArea=m?.area??-1;t.agent=agents.findIndex(a=>a.key===run.agent);t.route=area?.route||null;t.title=run.rule;t.description=run.summary||run.error||'等待执行结果';t.run=run;t.done=terminal(run.state);if(previous&&!terminal(previous)&&t.done)t.returnAt=sim;if(!previous&&t.done)t.returnAt=-Infinity;t.stage=isExecuting(run.state)?3:t.done?6:run.state==='queued'?0:1;t.hit.setAttribute('aria-label','查看运行 '+run.id+'：'+run.rule);retained.add(run.id);}
+ for(let i=tasks.length-1;i>=0;i--)if(!retained.has(tasks[i].id)){const t=tasks[i];disposeObjects([t.package]);t.hit.remove();tasks.splice(i,1);if(inspectedTask===t)closeParcel();}
+ focusedTask=tasks.find(t=>isExecuting(t.run.state))||tasks.find(t=>!t.done)||tasks[0]||null;
+ projects.forEach(p=>{p.label.querySelector('.count').textContent=p.rules.reduce((sum,l)=>sum+(l.totals.running||0)+(l.totals.queued||0),0);showProjectPage(p);});updateAgentList(data);
+ if(rebuild){if(selectedRule&&mapping[selectedRule])locateRule(selectedRule);else if(selectedGroup&&projects.some(p=>p.name===selectedGroup))selectProject(projects.findIndex(p=>p.name===selectedGroup));else overview();const previous=tasks.find(t=>t.id===selectedRun);if(previous)selectParcel(previous);}
+ if(selected>=0){$('#project-desc').textContent='AutoLoop 规则组 · '+projects[selected].rules.length+' 条规则';rebuildWorkspacePicker();updateDetail();}if(inspectedTask)updateParcelDetail();
+ document.body.dataset.groupCount=String(projects.length);document.body.dataset.agentCount=String(agents.length);
+}
+$('#workspace-select').onchange=e=>{const option=e.target.selectedOptions[0];if(option?.dataset.slot!==undefined)selectWorkArea(selected,Number(option.dataset.slot));else locateRule(e.target.value);};
+setSceneActions({rule:locateRule,agent:id=>{const i=agents.findIndex(a=>a.key===id);if(i>=0)focusAgent(i);}});
 const parcelScreen=new T.Vector3();
 function updateTasks(){
- for(const t of tasks){const age=sim-t.start,a=agents[t.agent],phase=phaseFor(age);t.stage=phase;t.package.visible=false;
-  if(phase===0)positionOn(t.package,t.route,age/5.5);
-  if(phase===1){t.package.visible=true;t.package.position.set(hub.x+Math.cos(age*3)*.9,2.1,hub.z+Math.sin(age*3)*.9);}
-  if(phase===2)positionOn(t.package,a.route,(age-7)/4.5);
-  if(phase===4)positionOn(t.package,a.route,(age-19.5)/4.5,true);
-  if(phase===5)positionOn(t.package,t.route,(age-24)/5.5,true);
-  t.hit.hidden=!t.package.visible;
-  if(t.package.visible){parcelScreen.copy(t.package.position).add(point(0,.25,0)).project(camera);const x=(parcelScreen.x*.5+.5)*innerWidth,y=(-parcelScreen.y*.5+.5)*innerHeight;t.hit.style.left=x+'px';t.hit.style.top=y+'px';t.hit.hidden=parcelScreen.z>1||x<0||x>innerWidth||y<80||y>innerHeight-40;t.hit.classList.toggle('inspected',inspectedTask===t);}
-  if(phase===6&&!t.done){t.done=true;completed++;$('#completed').textContent=completed+' 项已交付';t.package.removeFromParent();t.hit.remove();t.package.traverse(o=>{if(o.isMesh&&o.userData.ownedMaterial)o.material.dispose();});}
+ for(const t of tasks){const a=agents[t.agent];t.package.visible=false;
+ if(!t.done){if(isExecuting(t.run.state)&&a){t.package.visible=true;t.package.position.set(a.x-1.4,1.6,a.z);}else if(t.route)positionOn(t.package,t.route,t.run.state==='queued'?.12:.55);else{t.package.visible=true;t.package.position.set(hub.x,2.1,hub.z);}}
+ else if(sim-t.returnAt<7&&a&&t.route){const age=sim-t.returnAt;if(age<3)positionOn(t.package,a.route,age/3,true);else positionOn(t.package,t.route,(age-3)/4,true);}
+ t.hit.hidden=!t.package.visible;if(t.package.visible){parcelScreen.copy(t.package.position).add(point(0,.25,0)).project(camera);const x=(parcelScreen.x*.5+.5)*innerWidth,y=(-parcelScreen.y*.5+.5)*innerHeight;t.hit.style.left=x+'px';t.hit.style.top=y+'px';t.hit.hidden=parcelScreen.z>1||x<0||x>innerWidth||y<80||y>innerHeight-40;}
  }
- for(let i=tasks.length-1;i>=0;i--)if(tasks[i].done&&tasks[i]!==focusedTask&&tasks[i]!==inspectedTask)tasks.splice(i,1);
- for(let i=0;i<agents.length;i++){const busy=tasks.filter(t=>t.agent===i&&t.stage===3).length,count=tasks.filter(t=>t.agent===i&&!t.done).length,id=agents[i].key;$('#'+id+'-status').textContent=busy?agents[i].busy:(count?'等待包裹':'准备就绪');$('#'+id+'-signal').textContent=count;agents[i].columnMat.uniforms.uPower.value=busy?1.5:.6;}
- projects.forEach((p,i)=>{const n=tasks.filter(t=>t.project===i&&!t.done).length;p.label.querySelector('.count').textContent=n;p.label.querySelector('i').style.background=n?'#e6bf82':'#8caa8c';p.workspaces.forEach(area=>{const t=area.latest,color=!t?'#90a68a':t.done?'#79ae8c':t.stage===3?'#a496d6':'#e3b168';area.indicator.material.color.set(color);area.indicator.material.emissive.set(color);area.indicator.material.emissiveIntensity=t&&!t.done?.65:.15;const status=areaState(area);if(area.card.querySelector('.room-state').textContent!==status)area.card.querySelector('.room-state').textContent=status;});});
- if(focusedTask)updateActivity(focusedTask);if(selected>=0)updateDetail();if(inspectedTask)updateParcelDetail();
+ projects.forEach(p=>p.workspaces.forEach(area=>{const color=!area.line?'#9a9f97':area.line.paused?'#a99b83':isExecuting(area.latest?.run.state)?'#a496d6':area.latest?.run.state==='failed'?'#bd665b':'#79ae8c';area.indicator.material.color.set(color);area.indicator.material.emissive.set(color);area.indicator.material.emissiveIntensity=area.latest&&!area.latest.done?.65:.1;area.card.querySelector('.room-state').textContent=area.line?areaState(area):'';}));
+ if(focusedTask)updateActivity(focusedTask);else{$('#activity-task').textContent=hubState?'暂无运行记录':'正在连接中台';$('#activity-project').textContent='';$('#activity-status').textContent='等待真实任务';}
+ if(selected>=0)updateDetail();if(inspectedTask)updateParcelDetail();
 }
-function updateActivity(t){const p=projects[t.project],a=agents[t.agent],stage=t.stage===0?0:t.stage<=2?1:t.stage===3?2:3;$('#activity-task').textContent=t.title;$('#activity-project').textContent=p.name;$('#flow-agent').textContent=a.name;$('#activity-status').textContent=phaseNames[t.stage];document.querySelectorAll('[data-step]').forEach((el,i)=>{el.classList.toggle('active',i===stage);el.classList.toggle('done',i<stage);});}
+function updateActivity(t){$('#activity-task').textContent=t.title;$('#activity-project').textContent=projects[t.project]?.name||'原规则已移除';$('#flow-agent').textContent=hubState.agents.find(a=>a.id===t.run.agent)?.name||t.run.agent;$('#activity-status').textContent=stateNames[t.run.state]||t.run.state;const stage=t.stage===0?0:t.stage<3?1:t.stage===3?2:3;document.querySelectorAll('[data-step]').forEach((el,i)=>{el.classList.toggle('active',i===stage);el.classList.toggle('done',i<stage);});}
 function moveCamera(target,zoom,resetAngle=false){
  const offset=resetAngle?defaultPosition.clone().sub(defaultTarget):camera.position.clone().sub(controls.target);
  cameraTween={start:performance.now(),duration:matchMedia('(prefers-reduced-motion: reduce)').matches?0:1150,from:controls.target.clone(),to:target.clone(),positionFrom:camera.position.clone(),positionTo:target.clone().add(offset),zoomFrom:camera.zoom,zoomTo:zoom};
 }
 controls.addEventListener('start',()=>{cameraTween=null;});
-function selectProject(i){projects.forEach(p=>p.workspaces.forEach(a=>a.card.hidden=true));selected=i;selectedArea=1;closeParcel();document.body.classList.add('project-focus');$('#detail').hidden=false;$('.intro').style.visibility='hidden';$('#project-title').textContent=projects[i].name;$('#project-desc').textContent=projects[i].sub;moveCamera(point(projects[i].x+.45,.3,projects[i].z+.2),Math.min(3.5,Math.max(2.25,innerWidth/440)),true);updateDetail();}
-function selectWorkArea(i,j){if(selected!==i)selectProject(i);selectedArea=j;const area=projects[i].workspaces[j];if(area.latest)focusedTask=area.latest;updateDetail();}
-function updateDetail(){if(selected<0)return;const p=projects[selected],area=p.workspaces[selectedArea];$('#project-agent').textContent=agents[area.agent].name;$('#project-state').textContent=areaState(area);$('#workarea-name').textContent=area.name;$('#project-task').textContent=area.title;$('#task-description').textContent=area.description;$('#dispatch').innerHTML=area.latest&&!area.latest.done?'查看正在进行的任务 <span>↗</span>':'派送这项任务 <span>↗</span>';p.workspaces.forEach((a,j)=>a.card.classList.toggle('selected',j===selectedArea));selectionFrame.visible=true;selectionFrame.position.copy(area.anchor);selectionFrame.position.y=.43;}
+function selectProject(i){projects.forEach(p=>p.workspaces.forEach(a=>a.card.hidden=true));selected=i;selectedArea=Math.max(0,projects[i].workspaces.findIndex(a=>a.line));closeParcel();document.body.classList.add('project-focus');$('#detail').hidden=false;$('.intro').style.visibility='hidden';$('#project-title').textContent=projects[i].name;$('#project-desc').textContent='AutoLoop 规则组 · '+projects[i].rules.length+' 条规则';moveCamera(point(projects[i].x+.45,.3,projects[i].z+.2),Math.min(3.5,Math.max(2.25,innerWidth/440)),true);rebuildWorkspacePicker();updateDetail();}
+function selectWorkArea(i,j){if(selected!==i)selectProject(i);selectedArea=j;const area=projects[i].workspaces[j];if(area.latest)focusedTask=area.latest;rebuildWorkspacePicker();updateDetail();}
+function updateDetail(){if(selected<0)return;const p=projects[selected],area=p.workspaces[selectedArea],line=area.line;$('#project-agent').textContent=line?hubState.agents.find(a=>a.id===line.agent)?.name||line.agent:'未分配';$('#project-state').textContent=areaState(area);$('#workarea-name').textContent='工作区 '+((area.logicalArea??selectedArea)+1);$('#project-task').textContent=area.title;$('#task-description').textContent=area.description;$('#dispatch').textContent='立即运行';$('#dispatch').disabled=!line||!!line.paused||isBusy('rule:'+line?.name)||!isConnected();$('#rule-toggle').textContent=line?.paused?'恢复规则':'暂停规则';$('#rule-toggle').disabled=!line||isBusy('rule:'+line?.name)||!isConnected();$('#rule-latest').disabled=!area.latest;p.workspaces.forEach((a,j)=>a.card.classList.toggle('selected',j===selectedArea));selectionFrame.visible=true;selectionFrame.position.copy(area.anchor);selectionFrame.position.y=.43;}
 function closeProject(){selected=-1;$('#detail').hidden=true;$('.intro').style.visibility='visible';document.body.classList.remove('project-focus');selectionFrame.visible=false;projects.forEach(p=>p.workspaces.forEach(a=>a.card.hidden=true));$('#room-connectors').innerHTML='';}
-function overview(){closeProject();closeParcel();moveCamera(defaultTarget,1,true);}
+function overview(){closeProject();closeParcel();if(projects.length<=6&&agents.length<=3){moveCamera(defaultTarget,1,true);return;}const points=[...projects,...agents],minX=Math.min(...points.map(p=>p.x))-6,maxX=Math.max(...points.map(p=>p.x))+6,minZ=Math.min(...points.map(p=>p.z))-6,maxZ=Math.max(...points.map(p=>p.z))+6;const span=Math.hypot(maxX-minX,maxZ-minZ);moveCamera(point((minX+maxX)/2,0,(minZ+maxZ)/2),Math.min(1,(camera.right-camera.left)/(span*1.25),(camera.top-camera.bottom)/(span*.9)),true);}
 $('#close-detail').onclick=overview;$('#overview').onclick=overview;
-$('#dispatch').onclick=()=>{if(selected<0)return;const area=projects[selected].workspaces[selectedArea];if(area.latest&&!area.latest.done){selectParcel(area.latest);return;}if(!running)setRunning(true);dispatch(selected,true,selectedArea);};
-function selectParcel(task){inspectedTask=task;focusedTask=task;$('#parcel-detail').hidden=false;$('.agents').style.visibility='hidden';$('#parcel-title').textContent=task.title;$('#parcel-description').textContent=task.description;$('#parcel-id').textContent='包裹 '+String(task.id).padStart(3,'0');$('#parcel-project').textContent=projects[task.project].name+' · '+projects[task.project].workspaces[task.area].name;$('#parcel-agent').textContent=agents[task.agent].name;updateParcelDetail();}
-function updateParcelDetail(){const t=inspectedTask;if(!t)return;$('#parcel-state').textContent=phaseNames[t.stage];$('#parcel-destination').textContent=t.stage<2?'调度中台':t.stage<4?agents[t.agent].name:t.stage===4?'调度中台':projects[t.project].name+' · '+projects[t.project].workspaces[t.area].name;$('#parcel-progress').style.width=Math.min(100,((sim-t.start)/29.5)*100)+'%';document.querySelectorAll('#parcel-stages li').forEach((el,i)=>{const phase=t.stage===0?0:t.stage<3?1:t.stage===3?2:3;el.classList.toggle('active',i===phase&&!t.done);el.classList.toggle('done',i<phase||t.done);});$('#parcel-note').textContent=t.done?'已送回工作区，查看窗口会保留这次交付。':t.stage===3?'Agent 正在处理任务，完成后包裹会带回结果。':'状态会随这个包裹实时更新。';}
+async function selectedAction(verb){const line=projects[selected]?.workspaces[selectedArea]?.line;if(!line)return;try{await ruleAction(line,verb);toast('操作已完成');}catch(e){toast(e.message);}}
+$('#dispatch').onclick=()=>selectedAction('run');$('#rule-toggle').onclick=()=>selectedAction(projects[selected]?.workspaces[selectedArea]?.line?.paused?'resume':'pause');$('#rule-latest').onclick=()=>{const t=projects[selected]?.workspaces[selectedArea]?.latest;if(t)selectParcel(t);};$('#rule-manage').onclick=()=>openBoard('rules');
+function selectParcel(task){inspectedTask=task;focusedTask=task;$('#parcel-detail').hidden=false;$('.agents').style.visibility='hidden';$('#parcel-title').textContent=task.title;$('#parcel-description').textContent=task.description;$('#parcel-id').textContent='包裹 '+String(task.id).padStart(3,'0');$('#parcel-project').textContent=(projects[task.project]?.name||'原规则已移除，分组未知')+' · '+task.run.rule;$('#parcel-agent').textContent=hubState.agents.find(a=>a.id===task.run.agent)?.name||task.run.agent;updateParcelDetail();}
+function updateParcelDetail(){const t=inspectedTask;if(!t)return;$('#parcel-description').textContent=t.description;$('#parcel-state').textContent=stateNames[t.run.state]||t.run.state;$('#parcel-destination').textContent=t.done?'已结束':isExecuting(t.run.state)?t.run.agent:'等待中台派送';$('#parcel-progress').style.width=(t.done?100:t.stage===3?60:10)+'%';$('#parcel-note').textContent='创建 '+new Date(t.run.createdAt).toLocaleString('zh-CN')+(t.run.finishedAt?' · 结束 '+new Date(t.run.finishedAt).toLocaleString('zh-CN'):'');$('#parcel-locate').disabled=t.project<0;$('#run-stop').disabled=t.done||isBusy('run:'+t.id)||!isConnected();document.querySelectorAll('#parcel-stages li').forEach((el,i)=>{const phase=t.done?3:t.stage===3?2:0;el.classList.toggle('active',i===phase);el.classList.toggle('done',i<phase);});}
+$('#run-stop').onclick=async()=>{const t=inspectedTask;if(!t)return;try{await action('run:'+t.id,'/v1/runs/'+t.id+'/cancel');toast('停止请求已完成');}catch(e){toast(e.message);}};$('#run-why').onclick=()=>inspectedTask&&showWhy(inspectedTask.id);
 function closeParcel(){inspectedTask=null;$('#parcel-detail').hidden=true;$('.agents').style.visibility='visible';}
-$('#close-parcel').onclick=closeParcel;$('#parcel-locate').onclick=()=>{if(!inspectedTask)return;const t=inspectedTask;selectProject(t.project);selectWorkArea(t.project,t.area);};
+$('#close-parcel').onclick=closeParcel;$('#parcel-locate').onclick=()=>{if(!inspectedTask||inspectedTask.project<0)return;const t=inspectedTask;projects[t.project].page=Math.floor(t.logicalArea/3);showProjectPage(projects[t.project]);selectProject(t.project);selectWorkArea(t.project,t.area);};
 function focusAgent(i){closeProject();const a=agents[i];moveCamera(point(a.x-2,0,a.z),1.45);toast(a.name+' 工作站');}
 document.querySelectorAll('[data-agent]').forEach(el=>el.onclick=()=>focusAgent(Number(el.dataset.agent)));
-addEventListener('keydown',e=>{if(e.key==='Escape'){if(inspectedTask)closeParcel();else if(selected>=0)overview();}});
+addEventListener('keydown',e=>{if(document.querySelector('dialog[open]'))return;if(e.key==='Escape'){if(inspectedTask)closeParcel();else if(selected>=0)overview();}});
 function setRunning(v){running=v;$('#pause').ariaLabel=v?'暂停动画':'播放动画';$('#pause').innerHTML=v?'<svg viewBox="0 0 20 20"><path d="M7 5v10M13 5v10"/></svg>':'<svg viewBox="0 0 20 20"><path d="m7 4 9 6-9 6Z"/></svg>';}
 $('#pause').onclick=()=>setRunning(!running);setRunning(running);
 let showLabels=true;$('#labels-toggle').onclick=()=>{showLabels=!showLabels;$('#labels').style.display=showLabels?'block':'none';$('#labels-toggle').classList.toggle('selected',showLabels);$('#labels-toggle').ariaLabel=showLabels?'隐藏建筑标签':'显示建筑标签';};
-$('#zoom-in').onclick=()=>{cameraTween=null;camera.zoom=Math.min(4.5,camera.zoom*1.15);camera.updateProjectionMatrix();};$('#zoom-out').onclick=()=>{cameraTween=null;camera.zoom=Math.max(.72,camera.zoom/1.15);camera.updateProjectionMatrix();};
+$('#zoom-in').onclick=()=>{cameraTween=null;camera.zoom=Math.min(4.5,camera.zoom*1.15);camera.updateProjectionMatrix();};$('#zoom-out').onclick=()=>{cameraTween=null;camera.zoom=Math.max(.12,camera.zoom/1.15);camera.updateProjectionMatrix();};
 let daylight=true;
 function lighting(day){
  daylight=day;document.body.dataset.theme=day?'day':'night';$('#night').classList.toggle('selected',!day);$('#dawn').classList.toggle('selected',day);$('#night').setAttribute('aria-pressed',String(!day));$('#dawn').setAttribute('aria-pressed',String(day));
@@ -336,10 +359,10 @@ function lighting(day){
  hemi.color.set(day?'#fffdf4':'#c1d5ff');hemi.groundColor.set(day?'#a8b797':'#708876');hemi.intensity=day?2:1.8;
  moon.intensity=day?2.5:1.5;moon.color.set(day?'#fff1d8':'#bfd2ff');renderer.toneMappingExposure=day?.96:1.06;bloom.strength=day?.14:.28;
  warm.emissiveIntensity=day?.25:2.4;softWarm.emissiveIntensity=day?.1:.6;cool.emissiveIntensity=day?.7:1.7;violet.emissiveIntensity=day?.25:1.9;amber.emissiveIntensity=day?.25:1.9;violet.color.set(day?'#8975c4':'#c2c5ff');amber.color.set(day?'#c68b45':'#ffd3a5');
- nightEffects.forEach(o=>o.visible=!day);fireflies.visible=!day;hubLight.intensity=day?1:14;agents.forEach(a=>{a.light.intensity=day?2:20;a.columnMat.blending=day?T.NormalBlending:T.AdditiveBlending;a.columnMat.needsUpdate=true;a.emblem.userData.frontMaterial.emissiveIntensity=day?.02:.15;});
+ nightEffects.forEach(o=>o.visible=!day);fireflies.visible=!day;hubLight.intensity=day?1:14;agents.forEach(a=>{a.light.intensity=a.live?.online?(day?2:20):0;a.columnMat.blending=day?T.NormalBlending:T.AdditiveBlending;a.columnMat.needsUpdate=true;a.emblem.userData.frontMaterial.emissiveIntensity=day?.02:.15;});
  pondWaterMaterial.uniforms.uDay.value=day?1:0;
  cyan.emissiveIntensity=day?.25:1.9;cyan.color.set(day?'#589ca8':'#8bdbdf');
- $('#simtime').textContent=day?'10:24':'20:42';
+ 
 }
 $('#night').onclick=()=>lighting(false);$('#dawn').onclick=()=>lighting(true);lighting(true);
 let toastTimeout;function toast(message){$('#toast').textContent=message;$('#toast').classList.add('show');clearTimeout(toastTimeout);toastTimeout=setTimeout(()=>$('#toast').classList.remove('show'),3200);}
@@ -359,14 +382,18 @@ function projectLabels(){
  order.forEach((j,k)=>{const area=p.workspaces[j],pos=spots[j],y=Math.max(firstY+k*gap,pos.y-32);area.card.hidden=false;area.card.style.left=x+'px';area.card.style.top=Math.min(innerHeight-150,y)+'px';lines+='<path d="M '+pos.x+' '+pos.y+' L '+(x-18)+' '+(Math.min(innerHeight-150,y)+32)+' L '+x+' '+(Math.min(innerHeight-150,y)+32)+'"/>';});
  $('#room-connectors').innerHTML=lines;
 }
-let last=performance.now(),lastUi=-1,frame=0;dispatch(0,false,1);tasks[0].start=-1.8;dispatch(1,false,0);tasks[1].start=-12;dispatch(2,false,2);tasks[2].start=-21;focusedTask=tasks[0];
+let last=performance.now(),lastUi=-1,frame=0;
 function animate(now){requestAnimationFrame(animate);const dt=Math.min((now-last)/1000,.05);last=now;if(document.hidden)return;if(running)sim+=dt;controls.update();
 if(cameraTween){const t=cameraTween.duration===0?1:Math.min((now-cameraTween.start)/cameraTween.duration,1),k=t*t*(3-2*t);controls.target.copy(cameraTween.from).lerp(cameraTween.to,k);camera.position.copy(cameraTween.positionFrom).lerp(cameraTween.positionTo,k);camera.zoom=T.MathUtils.lerp(cameraTween.zoomFrom,cameraTween.zoomTo,k);camera.updateProjectionMatrix();camera.lookAt(controls.target);if(t===1)cameraTween=null;}
 
 beltTexture.offset.x=-sim*.32;beltBackTexture.offset.x=sim*.32;hubCore.rotation.y=sim*.45;core.rotation.z=sim*.2;coreRing2.rotation.y=sim*.4;
 agents.forEach((a,i)=>{a.rings.rotation.y=sim*(i===0?.22:-.18);a.rings.rotation.z=Math.sin(sim*.3)*.12;a.emblem.position.y=4.25+Math.sin(sim*.8+i)*.09;a.emblem.rotation.y=a.emblem.userData.baseYaw+Math.sin(sim*.32+i)*.22;a.rings.children[0].rotation.y=sim*.28;a.rings.children[1].rotation.y=-sim*.23;a.columnMat.uniforms.uTime.value=sim;});pondWaterMaterial.uniforms.uTime.value=sim;fireflies.rotation.y=Math.sin(sim*.025)*.02;
-if(sim-lastDispatch>6.8){lastDispatch=sim;autoIndex=(autoIndex+1)%projects.length;dispatch(autoIndex);}
+
 updateTasks();projectLabels();composer.render();frame++;if(frame===2){$('#loading').classList.add('done');window.__townReady=true;}
-if(sim-lastUi>1){lastUi=sim;const minutes=(daylight?24:42)+Math.floor(sim/30);$('#simtime').textContent=((daylight?10:20)+Math.floor(minutes/60)).toString().padStart(2,'0')+':'+(minutes%60).toString().padStart(2,'0');}
+if(now-lastUi>1000){lastUi=now;$('#simtime').textContent=new Date().toLocaleTimeString('zh-CN',{timeZone:hubState?.timezone||'Asia/Shanghai',hour:'2-digit',minute:'2-digit'});}
 }
-window.__town={getStats:()=>({modelsLoaded:modelLoaded,agentCount:agents.length,emblemCount:emblemLibrary.size,daylight,selectedProject:selected,selectedArea,cameraZoom:camera.zoom,inspectedTaskId:inspectedTask?.id??null,tasks:tasks.map(t=>({id:t.id,project:projects[t.project].name,area:t.area,agent:agents[t.agent].name,title:t.title,stage:t.stage,done:t.done})),completed,sim,running,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles}),dispatch,selectProject,selectWorkArea,selectParcel,overview};requestAnimationFrame(animate);
+window.__town={getStats:()=>({projectCount:projects.length,projects:projects.map(p=>({name:p.name,rules:p.rules?.length||0,page:p.page||0})),modelsLoaded:modelLoaded,agentCount:agents.length,emblemCount:emblemLibrary.size,daylight,selectedProject:selected,selectedArea,cameraZoom:camera.zoom,inspectedTaskId:inspectedTask?.id??null,tasks:tasks.map(t=>({id:t.id,group:projects[t.project]?.name||null,area:t.area,agent:agents[t.agent]?.name||t.run.agent,title:t.title,stage:t.stage,done:t.done})),completed,sim,running,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles}),selectProject,selectWorkArea,selectParcel,overview};requestAnimationFrame(animate);
+
+startHub(syncHub,(online,text)=>{$('#hub-status').textContent=text;document.body.dataset.connected=String(online);});
+
+labels.find(x=>x.el.textContent==='调度中台')?.el.addEventListener('click',()=>openBoard('rules'));

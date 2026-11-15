@@ -1,0 +1,41 @@
+import assert from 'node:assert/strict';
+import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {once} from 'node:events';
+const home=mkdtempSync(join(tmpdir(),'town-hub-test-'));
+process.env.AGENT_AUTOLOOP_HOME=home;
+process.env.AGENT_AUTOLOOP_RULES=join(home,'rules.json');
+writeFileSync(process.env.AGENT_AUTOLOOP_RULES,JSON.stringify({sources:{local:{name:'测试'}},agents:{claude:{name:'Claude',worker:'test',use:'claude'}},channels:{},rules:[{name:'试一下',when:{source:'local',types:['test.*']},to:'claude',cwd:home,prompt:'测试，不启动 Agent'}]}));
+const hub=await import('/Users/louis/projects/agent-autoloop/tests/hub.ts');
+const {serve}=await import('/Users/louis/projects/agent-autoloop/host/http.ts');
+const owner=hub.addKey('owner','test');
+writeFileSync(join(home,'config.json'),JSON.stringify({owner}),{mode:0o600});
+const backend=serve(0);await once(backend,'listening');
+process.env.TOWN_HUB='http://127.0.0.1:'+backend.address().port;process.env.TOWN_CONFIG=join(home,'config.json');process.env.PORT='18766';
+const {server}=await import('../server.mjs');await once(server,'listening');
+const base='http://127.0.0.1:18766/api';
+async function request(path,body,status=200,extra={}){const r=await fetch(base+path,{method:body===undefined?'GET':'POST',headers:{'content-type':'application/json',...extra},body:body===undefined?undefined:JSON.stringify(body)});assert.equal(r.status,status,path);return r.json();}
+const rule='/v1/rules/'+encodeURIComponent('试一下');
+try{
+ const state=await request('/v1/state');assert.equal(state.lines.length,1);await request('/town/catalog',undefined,404);
+ const paused=await request(rule+'/pause',{});await request(rule+'/run',{},409);
+ hub.ingest('local',{id:'missed',type:'test.work',subject:'one'});
+ const resumed=await request(rule+'/resume',{});assert.equal(resumed.paused.skipped.count,1);
+ const replay=await request(rule+'/replay',{since:paused.paused.since});assert.equal(replay.runs.length,1);
+ const cursor=(await request('/v1/state')).seq;
+ const stop=new AbortController();const live=fetch(base+'/v1/stream?after='+cursor,{signal:stop.signal});
+ const run=await request(rule+'/run',{subject:'two'});assert.ok(run.run);
+ const stream=await live;const reader=stream.body.getReader();const frame=await reader.read();assert.match(new TextDecoder().decode(frame.value),/event: fact/);stop.abort();
+ await request('/v1/runs/'+run.run+'/cancel',{});const why=await request('/v1/runs/'+run.run+'/why');assert.ok(why);
+ const reconnectCursor=(await request('/v1/state')).seq;
+ await request(rule+'/pause',{});
+ const reconnectAbort=new AbortController();const reconnect=await fetch(base+'/v1/stream',{headers:{'Last-Event-ID':String(reconnectCursor)},signal:reconnectAbort.signal});const resumedFrame=await reconnect.body.getReader().read();assert.ok(Number(/id: (\d+)/.exec(new TextDecoder().decode(resumedFrame.value))[1])>reconnectCursor);reconnectAbort.abort();
+ const card=hub.createCard({key:'test-card',kind:'ask',title:'测试卡片',text:'只用于隔离验收',options:['通过','待修复']});assert.equal((await request('/v1/state')).cards.length,1);await request('/v1/cards/'+card.card+'/answer',{text:'测试已处理'});
+ assert.equal((await request('/v1/state')).cards.length,0);
+ const card2=hub.tell('test-card2','测试结案','只用于隔离验收');await request('/v1/cards/'+card2.card+'/resolve',{reason:'完成测试'});
+ await request(rule+'/run',{},403,{origin:'https://example.invalid'});
+ await request('/v1/keys',{},404);
+ const body=await (await fetch('http://127.0.0.1:18766/app.js')).text();assert.ok(!body.includes(owner));
+ console.log('PASS: real isolated hub — snapshot, Chinese names, pause/run 409, resume/replay, run/cancel, SSE, why, card answer/resolve, origin guard, allowlist, secret isolation');
+}finally{server.closeAllConnections();server.close();backend.closeAllConnections();backend.close();if(hub.db.isOpen)hub.db.close();rmSync(home,{recursive:true,force:true});}
