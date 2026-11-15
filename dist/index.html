@@ -90,7 +90,7 @@ body[data-mode="snapshot"] #conn::after{content:"只读";margin-left:8px;padding
 <div class="right"><button id="rules-open" class="panel hbtn">规则文件</button><button id="runs-open" class="panel hbtn">轮次记录</button><button id="overview" class="panel hbtn">回到全景 ↗</button><button id="leave" class="panel hbtn">退出</button></div></header>
 <aside class="stats panel" aria-label="中台概况"><span class="eyebrow">中台概况</span><div id="totals"></div><p id="spend"></p>
 <div class="cards-head"><span class="eyebrow">待你拍板</span><b id="card-count">0</b></div><div id="card-list"></div></aside>
-<aside class="agents panel"><span class="eyebrow">Agent 工作站</span><div id="agent-list"></div></aside>
+<aside class="agents panel"><span class="eyebrow">执行工作站</span><div id="agent-list"></div></aside>
 <aside id="detail" class="detail panel" hidden aria-label="分组详情"><button id="close-detail" class="close" aria-label="关闭分组详情">×</button><span class="eyebrow">分组院落</span><h2 id="project-title"></h2><p id="project-desc"></p>
 <div id="rooms"></div><div id="rule-info"></div></aside>
 <aside id="info" class="detail panel" hidden aria-label="详细信息"><button id="close-info" class="close" aria-label="关闭详细信息">×</button><span class="eyebrow" id="info-eyebrow"></span><h2 id="info-title"></h2><div id="info-body"></div></aside>
@@ -126,6 +126,7 @@ body[data-mode="snapshot"] #conn::after{content:"只读";margin-left:8px;padding
 <script>setTimeout(function(){if(!window.__townReady){var l=document.getElementById("loading");if(l&&!l.classList.contains("done"))l.querySelector("span").textContent="加载时间较长。本页面需要联网加载 Three.js，并需要浏览器开启图形加速。";}},12000);</script>
 <script type="module">
 import * as T from 'three';
+import {groupStationAgents,executorKind} from './station-model.js?v=1';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
@@ -186,7 +187,7 @@ function demoTick(dt,first=false){const s=demo.s;if(!s)return false;let changed=
  if(changed)demoRecount();return changed;
 }
 function demoRecount(){const s=demo.s,tot=list=>{const t=demoTotals();for(const r of list){if(r.state==='claimed')t.running++;else if(r.state==='queued')t.queued++;else if(r.state==='done'){t.done++;t.doneToday++;}else if(r.state==='nothing')t.nothing++;}return t;};
- s.totals={...tot(s.runs),attention:s.cards.length};s.lines.forEach(l=>l.totals=tot(s.runs.filter(r=>r.rule===l.name)));s.agents.forEach(a=>a.totals=tot(s.runs.filter(r=>r.agent===a.id)));
+ s.totals={...tot(s.runs),attention:s.cards.length};s.lines.forEach(l=>l.totals=tot(s.runs.filter(r=>r.rule===l.name)));s.agents.forEach(a=>a.totals=tot(s.runs.filter(r=>a.memberIds.includes(r.agent))));
  const rounds=s.runs.filter(r=>FIN(r.state)).length;s.spending.today={rounds,tokens:rounds*1500,cached:0,cost:+(rounds*.01).toFixed(2),missingTokens:0,missingCost:0};s.spending.week=s.spending.today;s.seq++;s.now=new Date().toISOString();}
 async function demoApi(method,path,body){const s=demo.s;let m;
  if(method==='GET'&&path.startsWith('/v1/state'))return JSON.parse(JSON.stringify(s));
@@ -264,10 +265,10 @@ const brandDefs=[
  {key:'omp',name:'omp',maker:'oh-my-pi',color:PAL.omp,angle:75,busyText:'正在调试',icon:'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h5l6 10h5M15 7h5"/></svg>'}];
 // 工作站来自中台的 Agent 配置；品牌按编号、名称、接入方式匹配，其余用通用终端造型。
 const GEN=['#5b8def','#2fa4a0','#c0558a','#7a9a3a','#c9772e','#6d6fd6'],GENERIC_ICON='<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 8 4 4-4 4M12 16h6"/></svg>';
-const brandOf=a=>{const s=(a.id+' '+a.name+' '+a.use).toLowerCase();return /claude/.test(s)?'claude':/codex/.test(s)?'codex':/copilot/.test(s)?'copilot':/hermes/.test(s)?'hermes':/(^|[^a-z])omp([^a-z]|$)|oh-my-pi/.test(s)?'omp':/(^|[^a-z])pi([^a-z]|$)/.test(s)?'pi':'generic';};
-const workerOrder=[...new Set(S.agents.map(a=>a.worker))];
-const STEP=S.agents.length>1?Math.min(30,150/(S.agents.length-1)):0,R=S.agents.length>6?10.2/(STEP*PI/180):19;
-const agentDefs=[...S.agents].sort((a,b)=>workerOrder.indexOf(a.worker)-workerOrder.indexOf(b.worker)).map((a,i,all)=>{const key=brandOf(a),b=brandDefs.find(d=>d.key===key);return {key,id:a.id,name:a.name,maker:a.worker,worker:a.worker,color:b?b.color:GEN[i%6],icon:b?b.icon:GENERIC_ICON,iconBg:b&&b.iconBg,angle:(i-(all.length-1)/2)*STEP,data:a};});
+const brandOf=executorKind;
+const stationGroups=groupStationAgents(S.agents),workerOrder=[...new Set(stationGroups.map(a=>a.worker))];
+const STEP=stationGroups.length>1?Math.min(30,150/(stationGroups.length-1)):0,R=stationGroups.length>6?11.2/(STEP*PI/180):19;
+const agentDefs=stationGroups.map((a,i,all)=>{const key=a.key,b=brandDefs.find(d=>d.key===key);return {key,id:a.id,memberIds:a.memberIds,name:a.name,maker:a.worker,worker:a.worker,color:b?b.color:key==='script'?PAL.teal:GEN[i%6],icon:b?b.icon:GENERIC_ICON,iconBg:b&&b.iconBg,angle:(i-(all.length-1)/2)*STEP,data:a};});
 agentDefs.forEach(d=>{d.mat=mk(d.color,{roughness:.55});d.glowMat=mk(d.color,{emissive:d.color,emissiveIntensity:.35,roughness:.4});d.col=new T.Color(d.color);d.pale=new T.Color('#ffffff').lerp(d.col,.22);});
 const G={box:new T.BoxGeometry(1,1,1),ico:new T.IcosahedronGeometry(1,1),ico0:new T.IcosahedronGeometry(1,0),pyr:new T.CylinderGeometry(0,.7071,1,4).rotateY(PI/4)};
 {const s=new T.Shape();s.moveTo(-.5,0);s.lineTo(.5,0);s.lineTo(0,1);s.closePath();G.prism=new T.ExtrudeGeometry(s,{depth:1,bevelEnabled:false});G.prism.translate(0,0,-.5);}
@@ -331,7 +332,7 @@ const easeOutBack=x=>1+2.70158*Math.pow(x-1,3)+1.70158*Math.pow(x-1,2);
 
 // ================= 数据与布局（全部来自中台状态） =================
 const hub=v3(9,0,.1);
-const agentIx={};agentDefs.forEach((d,i)=>agentIx[d.id]=i);
+const agentIx={};agentDefs.forEach((d,i)=>{agentIx[d.id]=i;d.memberIds.forEach(id=>agentIx[id]=i);});
 const ROWS=[-8.2,6.2,14.6,23,31.4,39.8,48.2,56.6],SLOT=6;
 const groupNames=[...new Set(S.lines.map(l=>l.group))];
 const projects=groupNames.map((name,i)=>{const row=Math.floor(i/2),z=row<ROWS.length?ROWS[row]:ROWS[ROWS.length-1]+(row-ROWS.length+1)*8.4;return {name,x:i%2?-5:-18.6,z,lines:S.lines.filter(l=>l.group===name),villagers:[]};});
@@ -542,7 +543,7 @@ function station(def,index){
  // 品牌招牌：名称与出品方，朝向镜头。
  at(x+2.3,0,z+3.3,FACE,()=>{bx(M.ink,2.9,1.14,.1,0,1.72,-.06);[-1.15,1.15].forEach(q=>cy(M.teal,.05,.05,1.2,q,.6,-.06,6));bx(def.mat,2.9,.08,.16,0,2.33,-.06);});
  const tex=signTexture(def.name,def.maker,def.color),sm=new T.MeshStandardMaterial({map:tex,emissive:'#ffffff',emissiveMap:tex,emissiveIntensity:.3,roughness:.6});signMats.push(sm);const sign=dyn(new T.PlaneGeometry(2.76,1.03),sm,scene,x+2.3,1.72,z+3.3,false);sign.rotation.y=FACE;
- const g=new T.Group();g.position.set(x,3.65,z);scene.add(g);a.sculpt=g;a.update=sculptors[def.key](a,g,def);
+ const g=new T.Group();g.position.set(x,3.65,z);scene.add(g);a.sculpt=g;a.update=(sculptors[def.key]||sculptors.generic)(a,g,def);
  a.shock=fx(new T.RingGeometry(.9,1,64),def.color,scene);a.shock.rotation.x=-PI/2;a.shock.position.set(x,.62,z);
  a.link=fx(beamGeo,def.color,scene,0,T.FrontSide);a.link.position.set(hub.x,2.75,hub.z);a.link.lookAt(x,3.65,z);a.link.scale.z=Math.hypot(x-hub.x,z-hub.z,.9);
  a.light=new T.PointLight(def.color,3,12,2);a.light.position.set(x,3.2,z);scene.add(a.light);
@@ -733,7 +734,7 @@ function applyState(s){
  for(const t of tasks){if(t.done)continue;const r=byId.get(t.id);if(r)t.run=r;else if(!initial)endTask(t);}
  [...s.runs].reverse().forEach(r=>{if(!seenRuns.has(r.id)){seenRuns.add(r.id);addTask(r,initial);}});
  const lineOf=new Map(s.lines.map(l=>[l.name,l]));projects.forEach(p=>{p.lines=p.lines.map(l=>lineOf.get(l.name)||l);p.workspaces.forEach(a=>a.line=lineOf.get(a.name)||a.line);});
- agents.forEach(a=>{a.data=s.agents.find(q=>q.id===a.id)||a.data;});
+ const grouped=new Map(groupStationAgents(s.agents).map(a=>[a.id,a]));agents.forEach(a=>{a.data=grouped.get(a.id)||a.data;a.memberIds=a.data.memberIds;});
  sources.forEach(o=>{const d=s.sources.find(q=>q.id===o.data.id);if(d){if(!initial&&d.events>o.events)o.flash=1;o.events=d.events;o.data=d;}});
  channels.forEach(o=>{const d=s.channels.find(q=>q.id===o.data.id);if(d)o.data=d;});
  let fresh=0;for(const c of s.cards)if(!seenCards.has(c.id)){seenCards.add(c.id);if(!initial)fresh++;}
@@ -759,7 +760,7 @@ if(conn.mode==='live'){startStream();setInterval(()=>{if(!conn.stream||Date.now(
 const fmtT=iso=>{if(!iso)return '—';const d=new Date(iso);return isNaN(d)?'—':d.toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});};
 const fmtN=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(1)+'k':String(n||0);
 const sourceName=id=>id==='schedule'?'定时':(S.sources.find(s=>s.id===id)||{}).name||id;
-const agentName=id=>(S.agents.find(a=>a.id===id)||{}).name||id;
+const agentName=id=>agentIx[id]===undefined?((S.agents.find(a=>a.id===id)||{}).name||id):agents[agentIx[id]].name;
 const agentColor=id=>agentIx[id]===undefined?'#90a68a':agents[agentIx[id]].color;
 const row=(k,v)=>'<div class="line"><span>'+k+'</span><b>'+v+'</b></div>';
 const activeRuns=f=>S.runs.filter(r=>!FIN(r.state)&&f(r));
@@ -775,7 +776,7 @@ function renderHud(){
  $('#spend').textContent=[spend('今天',sp.today),spend('近 7 天',sp.week)].filter(Boolean).join('　');
  $('#card-count').textContent=S.cards.length;
  $('#card-list').innerHTML=S.cards.length?S.cards.map(c=>'<button data-act="card" data-id="'+esc(c.id)+'"><i class="k '+(c.kind==='ask'?'ask':'notice')+'"></i><strong>'+esc(c.title)+'</strong><span>'+esc(c.rule||'中台')+' · '+(c.kind==='ask'?'等你决定':'通知')+'</span></button>').join(''):'<p class="none">没有等你处理的卡片。</p>';
- agents.forEach(a=>{const run=activeRuns(r=>r.agent===a.id&&r.state!=='queued').length,all=activeRuns(r=>r.agent===a.id).length;a.statusEl.textContent=!a.data.online?'离线':run?'处理中 '+run+' 轮':'空闲';a.signalEl.textContent=all;a.rowEl.classList.toggle('busy',a.data.online&&run>0);a.rowEl.classList.toggle('offline',!a.data.online);a.label.el.classList.toggle('offline',!a.data.online);});
+ agents.forEach(a=>{const run=activeRuns(r=>a.memberIds.includes(r.agent)&&r.state!=='queued').length,all=activeRuns(r=>a.memberIds.includes(r.agent)).length;const ready=S.localAgentReadiness?.[a.key];a.statusEl.textContent=!a.data.online?'电脑离线':run?'处理中 '+run+' 轮':ready?.ready===false?'待登录':ready?.ready===true||a.key==='script'?'可接任务':'电脑在线';a.signalEl.textContent=all;a.rowEl.classList.toggle('busy',a.data.online&&run>0);a.rowEl.classList.toggle('offline',!a.data.online);a.label.el.classList.toggle('offline',!a.data.online);});
  workerLabels.forEach(w=>{const on=S.agents.some(a=>a.worker===w.name&&a.online);w.el.classList.toggle('offline',!on);w.el.querySelector('small').textContent=on?'在线':'离线';});
  projects.forEach(p=>{const names=new Set(p.lines.map(l=>l.name)),n=activeRuns(r=>names.has(r.rule)).length;p.label.el.querySelector('.count').textContent=n;p.label.el.classList.toggle('active',n>0);
   let skipped=0;p.lines.forEach(l=>{skipped+=(l.paused&&l.paused.skipped&&l.paused.skipped.count)||0;});p.pile.forEach((m,k)=>m.visible=k<Math.min(3,skipped));
@@ -837,9 +838,9 @@ function showTimers(){uiTick();listPanel('复查闹钟','Agent 预约的复查',
 function showSource(i){uiTick();const o=sources[i],d=o.data;listPanel('来源',d.name,'来源编号 '+esc(d.id)+'，累计 '+esc(d.events)+' 条事件。下面是接这个来源的规则。',S.lines.filter(l=>l.source===d.id).map(l=>'<div>'+esc(l.name)+'<em>'+(l.source==='schedule'?esc(l.every||''):esc((l.types||[]).join('、')))+' → '+esc(agentName(l.agent))+'</em></div>'),()=>showSource(i));}
 function showChannel(i){uiTick();const d=channels[i].data,f=d.lastFailure;info('通道',d.name,row('通道程序',d.online?'在线':'离线')+row('最近联系',fmtT(d.seenAt))+(f?row('最近一次发送失败','卡片 #'+esc(f.card)+'，试了 '+esc(f.tries)+' 次'+(f.givenUp?'，已放弃':''))+row('原因',esc(f.error)):row('最近一次发送','没有失败记录'))+'<p>中台通过通道把卡片送到你面前。你也可以直接在这个页面回答卡片。</p>',()=>showChannel(i));}
 function showElsewhere(i){uiTick();const d=sheds[i].data;info('别处任务',d.name,'<p>这个任务不由中台启动，它在别处定时运行，只向中台报告。</p>'+row('在哪里',esc(d.where||'—'))+row('周期',esc(d.every||d.cron||'—'))+row('下次',fmtT(d.next))+row('Agent',esc(agentName(d.agent)))+row('来源',esc(sourceName(d.source))),()=>showElsewhere(i));}
-function showAgent(i){const a=agents[i],d=a.data,tt=d.totals||{};const runs=activeRuns(r=>r.agent===a.id);
- info('Agent 工作站',d.name,row('编号',esc(d.id))+row('接入方式',esc(d.use))+(d.program?row('启动程序',esc(d.program)):'')+row('所在电脑',esc(d.worker))+row('电脑状态',d.online?'在线':'离线')+row('最近联系',fmtT(d.seenAt))+row('累计',num(tt.done)+' 做成 · '+num(tt.nothing)+' 没事可做')+
-  '<div class="sublist"><span class="eyebrow">手上的轮次</span>'+(runs.length?runs.map(r=>'<button data-act="run" data-id="'+esc(r.id)+'">第 '+esc(r.id)+' 轮 · '+esc(r.rule)+'<em>'+esc(stateText(r))+'</em></button>').join(''):'<div>现在没有。</div>')+'</div>',()=>showAgent(i));}
+function showAgent(i){const a=agents[i],d=a.data,tt=d.totals||{};const runs=activeRuns(r=>a.memberIds.includes(r.agent));
+ info('Agent 工作站',d.name,row('执行工具',esc(d.name))+row('配置数量',String(d.members.length))+row('接入状态',esc(S.localAgentReadiness?.[a.key]?.message||'按中台配置执行'))+row('接入方式',esc(d.use))+(d.program?row('启动程序',esc(d.program)):'')+row('所在电脑',esc(d.worker))+row('电脑状态',d.online?'在线':'离线')+row('最近联系',fmtT(d.seenAt))+row('累计',num(tt.done)+' 做成 · '+num(tt.nothing)+' 没事可做')+
+  '<div class="sublist"><span class="eyebrow">包含的执行配置</span>'+d.members.map(m=>'<div>'+esc(m.name)+'<em>'+esc(m.id)+' · '+esc(m.use)+'</em></div>').join('')+'</div><div class="sublist"><span class="eyebrow">手上的轮次</span>'+(runs.length?runs.map(r=>'<button data-act="run" data-id="'+esc(r.id)+'">第 '+esc(r.id)+' 轮 · '+esc(r.rule)+'<em>'+esc(stateText(r))+'</em></button>').join(''):'<div>现在没有。</div>')+'</div>',()=>showAgent(i));}
 function focusAgent(i){uiTick();closeProject();const a=agents[i];moveCamera(v3(a.x,0,a.z),baseZoom*1.9);showAgent(i);}
 function showHub(){uiTick();const t=S.totals||{};info('调度中台','中台',row('连接',esc(conn.link))+(conn.mode==='live'?row('地址',esc(conn.url)):'')+row('时区',esc(S.timezone||'—'))+row('正在处理',num(t.running))+row('排队',num(t.queued))+row('等重试',num(t.retrying))+row('不确定',num(t.unknown))+row('今日完成',num(t.doneToday))+row('待你拍板',num(t.attention))+'<p>中台按规则把事件派给 Agent，并把卡片送到通道。</p>',showHub);}
 function showRuns(){const all=[...S.runs,...(history?history.runs:[])].filter((r,k,a)=>a.findIndex(q=>q.id===r.id)===k).sort((a,b)=>b.id-a.id),more=history?history.next:(S.hasMore?S.nextBefore:null);

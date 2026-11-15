@@ -32,6 +32,7 @@ export const server=createServer(async(req,res)=>{
     const headers={authorization:'Bearer '+owner,'content-type':'application/json'};
     if(req.headers['last-event-id'])headers['last-event-id']=req.headers['last-event-id'];
     const upstream=await fetch(hub+path+url.search,{method:req.method,headers,body,signal:controller.signal,redirect:'error'});
+    if(path==='/v1/state'&&upstream.ok){const state=await upstream.json();try{const readiness=JSON.parse(await readFile(dirname(config)+'/town-agent-readiness.json','utf8'));state.localAgentReadiness=readiness;}catch{}res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(state));return;}
     res.writeHead(upstream.status,{'content-type':upstream.headers.get('content-type')||'application/json','cache-control':'no-store','x-content-type-options':'nosniff','x-accel-buffering':'no'});
     res.flushHeaders();if(upstream.body){const stream=Readable.fromWeb(upstream.body);stream.on('error',()=>res.destroy());stream.pipe(res);}else res.end();
    }finally{clearTimeout(timeout);}return;
