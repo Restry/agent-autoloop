@@ -82,13 +82,14 @@ body[data-mode="snapshot"] #conn::after{content:"只读";margin-left:8px;padding
 #rules-msg{font-size:12px;color:var(--accent);min-height:18px;white-space:pre-wrap;margin:8px 0}.modal .btns button:disabled,.modal button:disabled{opacity:.45;cursor:not-allowed}
 @media (max-width:820px){.entry-grid,.modal{grid-template-columns:1fr}.stats{width:240px}#info{width:270px}}
 .agents{width:268px;overflow-x:hidden}.agents button>div{min-width:0;flex:1}.agents .sub{white-space:normal;overflow-wrap:anywhere;line-height:1.4}.agents .signal{flex:none}@media(max-width:820px){.agents{width:210px}}
+.github-modal{width:min(620px,calc(100vw - 32px));max-height:90vh;overflow:auto;padding:26px;position:relative}.github-modal h2{margin:10px 0}.github-modal p{font-size:12px;line-height:1.8;color:var(--muted)}.github-choice{display:flex;align-items:center;gap:9px;font-size:12px;margin:13px 0}.github-choice input{width:auto}#project-github{margin:8px 0 14px}.github-modal #github-msg{min-height:20px;color:var(--accent)}
 </style>
 <script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/addons/"}}</script></head>
 <body data-theme="dusk">
 <main id="world" aria-label="Agent 小镇三维场景"><canvas id="scene"></canvas><div id="labels"></div></main>
 <header><div class="brand panel"><svg width="26" height="26" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m14 2 10.4 6v12L14 26 3.6 20V8L14 2Z"/><path d="m3.6 8 10.4 6 10.4-6M14 14v12"/></svg><div><strong>Agent 小镇</strong><span>Agent Autoloop 中台</span></div></div>
 <div class="clock panel" id="conn"><i class="live"></i><span id="conn-text">未连接</span></div>
-<div class="right"><button id="rules-open" class="panel hbtn">规则文件</button><button id="runs-open" class="panel hbtn">轮次记录</button><button id="overview" class="panel hbtn">回到全景 ↗</button><button id="leave" class="panel hbtn">退出</button></div></header>
+<div class="right"><button id="github-new">接入 GitHub</button><button id="rules-open" class="panel hbtn">规则文件</button><button id="runs-open" class="panel hbtn">轮次记录</button><button id="overview" class="panel hbtn">回到全景 ↗</button><button id="leave" class="panel hbtn">退出</button></div></header>
 <aside class="stats panel" aria-label="中台概况"><span class="eyebrow">中台概况</span><div id="totals"></div><p id="spend"></p>
 <div class="cards-head"><span class="eyebrow">待你拍板</span><b id="card-count">0</b></div><div id="card-list"></div></aside>
 <aside class="agents panel"><span class="eyebrow">执行工作站</span><div id="agent-list"></div></aside>
@@ -117,6 +118,7 @@ body[data-mode="snapshot"] #conn::after{content:"只读";margin-left:8px;padding
 <label class="field">提示词<textarea id="rule-prompt" rows="3" placeholder="写清楚要 Agent 做什么"></textarea></label>
 <label class="field">分组（可不填，默认等于规则名称）<input id="rule-group"></label>
 <button id="rule-add" class="ghost wide">加入左边的文本</button></div></div></div>
+<div id="github-modal" class="overlay" hidden><form id="github-form" class="panel github-modal" role="dialog" aria-label="GitHub 项目配置"><button type="button" id="github-close" class="close" aria-label="关闭 GitHub 配置">×</button><span class="eyebrow">院落配置</span><h2>GitHub Issue 跟进</h2><p>每个院落独立连接仓库。检查脚本读取 Issue，模型 Agent 在本地处理；不提交、推送或回复 GitHub。</p><label class="field">院落名称<input id="github-group" required maxlength="80" placeholder="例如：我的项目"></label><label class="field">GitHub 仓库<input id="github-repo" required placeholder="owner/repo 或仓库网址"></label><label class="field">本机项目目录<input id="github-cwd" required placeholder="/Users/你的名字/projects/my-project"></label><label class="field">负责 Agent<select id="github-agent"></select></label><label class="field">检查频率<select id="github-cron"><option value="*/5 * * * *">每 5 分钟</option><option value="*/15 * * * *">每 15 分钟</option><option value="*/30 * * * *">每 30 分钟</option><option value="0 * * * *">每小时</option></select></label><label class="field">只跟进指定标签（选填）<input id="github-label" placeholder="留空表示不限制标签"></label><label class="github-choice"><input type="checkbox" id="github-existing">同时跟进现有未关闭 Issue</label><label class="github-choice"><input type="checkbox" id="github-enabled" checked>启用此院落的 GitHub 跟进</label><p id="github-msg" role="status"></p><div class="btns"><button type="button" id="github-check" class="ghost">检查仓库与目录</button><button id="github-save" class="primary" type="submit">保存设置</button></div></form></div>
 <div id="entry" class="overlay" hidden><div class="entry panel"><span class="eyebrow">AGENT 小镇</span><h1>选择一个入口</h1><p>小镇只显示 Agent Autoloop 中台真实存在的内容。</p>
 <div class="entry-grid">
 <section><h2>连接中台</h2><p>读取真实状态，并可以回答卡片、控制规则。密钥只保存在这个页面会话里。</p><label class="field">中台地址<input id="entry-url" value="http://127.0.0.1:3350"></label><label class="field">本人密钥<input id="entry-key" type="password" autocomplete="off"></label><button id="entry-connect" class="primary">连接</button></section>
@@ -797,9 +799,11 @@ function updateActivity(){const t=focusedTask;$('#activity-mode').textContent=co
 function moveCamera(target,zoom,resetAngle=false){const offset=resetAngle?defaultPosition.clone().sub(defaultTarget):camera.position.clone().sub(controls.target);cameraTween={start:performance.now(),duration:reduced?0:1150,from:controls.target.clone(),to:target.clone(),positionFrom:camera.position.clone(),positionTo:target.clone().add(offset),zoomFrom:camera.zoom,zoomTo:zoom};}
 controls.addEventListener('start',()=>{cameraTween=null;});
 // ---- 院落（分组）与规则
+$('#project-desc').insertAdjacentHTML('afterend','<button id="project-github" class="ghost wide">配置 GitHub 仓库</button>');
 function selectProject(i){uiTick();selected=i;selectedRule=0;closeInfo();document.body.classList.add('focus');$('#detail').hidden=false;$('#project-title').textContent=projects[i].name;moveCamera(v3(projects[i].x+.5,.3,projects[i].z+.2),Math.min(3.4,Math.max(2.2,innerWidth/460)),true);updateDetail();}
 function selectArea(i,j){if(selected!==i)selectProject(i);else uiTick();selectedRule=j;updateDetail();}
 function updateDetail(){if(selected<0)return;const p=projects[selected],l=p.lines[selectedRule]||p.lines[0];
+ const ghProject=Object.values(S.githubProjects||{}).find(g=>g.group===p.name);$('#project-github').textContent=ghProject?'GitHub · '+ghProject.repo+(ghProject.enabled?'':'（已停用）'):'配置 GitHub 仓库';
  $('#project-desc').textContent='这个分组有 '+p.lines.length+' 条规则，它们排同一条队。'+(p.lines.length>p.workspaces.length?'院子里只画了前 '+p.workspaces.length+' 间小屋，其余规则在下面的列表里。':'');
  $('#rooms').innerHTML=p.lines.map((q,j)=>{const act=activeRuns(r=>r.rule===q.name).length;return '<button data-act="rule" data-id="'+j+'" class="'+(q===l?'selected':'')+'"><i class="r-dot" style="background:'+agentColor(q.agent)+'"></i><span class="r-name">'+esc(sourceName(q.source))+'</span><span class="r-agent">'+esc(agentName(q.agent))+'</span><strong>'+esc(q.name)+'</strong><span class="r-state">'+(q.paused?'已暂停':act?act+' 轮进行中':'空闲')+'</span></button>';}).join('');
  if(!l)return;const tt=l.totals||{},pa=l.paused,later=(S.skipped||[]).filter(e=>(e.rules||[]).includes(l.name));
@@ -861,6 +865,19 @@ $('#rule-add').onclick=()=>{let doc;try{doc=JSON.parse($('#rules-text').value);}
  const cron=$('#rule-kind').value==='cron',when=cron?{cron:$('#rule-cron').value.trim()}:{source:$('#rule-source').value,types:$('#rule-types').value.split(/[,，\s]+/).filter(Boolean)};
  if(cron?!when.cron:(!when.source||!when.types.length)){$('#rules-msg').textContent=cron?'请填写定时表达式，例如 0 9 * * *。':'请选择来源并填写事件类型。';return;}
  if(!Array.isArray(doc.rules))doc.rules=[];doc.rules.push({name,when,to,cwd,prompt,...(group?{group}:{})});$('#rules-text').value=JSON.stringify(doc,null,2);$('#rules-msg').textContent='已加入文本，还没有保存。请先点「检查」，再点「保存」。';};
+let githubRevision='';
+function githubInput(){return {group:$('#github-group').value.trim(),repo:$('#github-repo').value.trim(),cwd:$('#github-cwd').value.trim(),agent:$('#github-agent').value,cron:$('#github-cron').value,label:$('#github-label').value.trim(),includeExisting:$('#github-existing').checked,enabled:$('#github-enabled').checked,revision:githubRevision};}
+function githubBusy(busy){$('#github-check').disabled=busy;$('#github-save').disabled=busy;}
+async function openGithub(group=''){
+ if(conn.mode!=='live')return toast('连接本机中台后才能配置 GitHub。');
+ $('#github-modal').hidden=false;$('#github-msg').textContent='正在读取院落配置…';githubBusy(true);githubRevision='';
+ try{const r=await api('GET','/projects/github?group='+encodeURIComponent(group)),p=r.project;githubRevision=r.revision;$('#github-group').value=group||p.group||'';$('#github-group').readOnly=!!group;$('#github-repo').value=p.repo||'';$('#github-cwd').value=p.cwd||'';$('#github-agent').innerHTML=r.agents.map(a=>'<option value="'+esc(a.id)+'">'+esc(a.name)+'</option>').join('');$('#github-agent').value=p.agent;$('#github-cron').value=p.cron;$('#github-label').value=p.label||'';$('#github-existing').checked=!!p.includeExisting;$('#github-enabled').checked=p.enabled!==false;$('#github-msg').textContent='默认从首次启用时开始跟进新 Issue。';githubBusy(false);}catch(e){$('#github-msg').textContent='读取失败：'+e.message;}
+}
+$('#github-new').onclick=()=>openGithub();$('#project-github').onclick=()=>selected>=0&&openGithub(projects[selected].name);$('#github-close').onclick=()=>$('#github-modal').hidden=true;
+$('#github-check').onclick=async()=>{githubBusy(true);$('#github-msg').textContent='正在核对仓库、目录和规则…';try{const r=await api('POST','/projects/github/check',githubInput());$('#github-msg').textContent=r.message;}catch(e){$('#github-msg').textContent=e.message;}finally{githubBusy(false);}};
+$('#github-form').onsubmit=async e=>{e.preventDefault();githubBusy(true);$('#github-msg').textContent='正在保存…';try{const r=await api('PUT','/projects/github',githubInput());$('#github-msg').textContent=r.message;setTimeout(()=>location.reload(),1000);}catch(e){$('#github-msg').textContent='未保存：'+e.message;githubBusy(false);}};
+addEventListener('keydown',e=>{if(e.key==='Escape')$('#github-modal').hidden=true;});
+
 // ---- 所有带 data-act 的按钮
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-act]');if(!b)return;const act=b.dataset.act,id=+b.dataset.id;uiTick();
  try{
