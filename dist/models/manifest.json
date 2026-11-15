@@ -1,0 +1,202 @@
+[
+  {
+    "alias": "family",
+    "id": "two-storey-family-house-c63c4a",
+    "title": "Two-Storey Family House",
+    "page": "https://polyfork.dev/asset/two-storey-family-house-c63c4a",
+    "glb": "https://polyfork.dev/cdn/two-storey-family-house-c63c4a.glb",
+    "path": "models/family.glb",
+    "credit": "Two-Storey Family House by Polyfork, CC BY 4.0",
+    "bytes": 119284
+  },
+  {
+    "alias": "cottage",
+    "id": "porch-front-cottage-620c29",
+    "title": "Porch-Front Cottage",
+    "page": "https://polyfork.dev/asset/porch-front-cottage-620c29",
+    "glb": "https://polyfork.dev/cdn/porch-front-cottage-620c29.glb",
+    "path": "models/cottage.glb",
+    "credit": "Porch-Front Cottage by Polyfork, CC BY 4.0",
+    "bytes": 179848
+  },
+  {
+    "alias": "ranch",
+    "id": "single-storey-ranch-house-3880ea",
+    "title": "Single-Storey Ranch House",
+    "page": "https://polyfork.dev/asset/single-storey-ranch-house-3880ea",
+    "glb": "https://polyfork.dev/cdn/single-storey-ranch-house-3880ea.glb",
+    "path": "models/ranch.glb",
+    "credit": "Single-Storey Ranch House by Polyfork, CC BY 4.0",
+    "bytes": 134476
+  },
+  {
+    "alias": "split",
+    "id": "split-level-house-40fe1a",
+    "title": "Split-Level House",
+    "page": "https://polyfork.dev/asset/split-level-house-40fe1a",
+    "glb": "https://polyfork.dev/cdn/split-level-house-40fe1a.glb",
+    "path": "models/split.glb",
+    "credit": "Split-Level House by Polyfork, CC BY 4.0",
+    "bytes": 202304
+  },
+  {
+    "alias": "townhouse",
+    "id": "townhouse-row-unit-b9544b",
+    "title": "Townhouse Row Unit",
+    "page": "https://polyfork.dev/asset/townhouse-row-unit-b9544b",
+    "glb": "https://polyfork.dev/cdn/townhouse-row-unit-b9544b.glb",
+    "path": "models/townhouse.glb",
+    "credit": "Townhouse Row Unit by Polyfork, CC BY 4.0",
+    "bytes": 96216
+  },
+  {
+    "alias": "oak",
+    "id": "broadleaf-oak-997c22",
+    "title": "Broadleaf Oak",
+    "page": "https://polyfork.dev/asset/broadleaf-oak-997c22",
+    "glb": "https://polyfork.dev/cdn/broadleaf-oak-997c22.glb",
+    "path": "models/oak.glb",
+    "credit": "Broadleaf Oak by Polyfork, CC BY 4.0",
+    "bytes": 53860
+  },
+  {
+    "alias": "ornamental",
+    "id": "ornamental-front-yard-tree-c6781a",
+    "title": "Ornamental Front-Yard Tree",
+    "page": "https://polyfork.dev/asset/ornamental-front-yard-tree-c6781a",
+    "glb": "https://polyfork.dev/cdn/ornamental-front-yard-tree-c6781a.glb",
+    "path": "models/ornamental.glb",
+    "credit": "Ornamental Front-Yard Tree by Polyfork, CC BY 4.0",
+    "bytes": 67360
+  },
+  {
+    "alias": "cherry",
+    "id": "cherry-blossom-tree-3f7ab7",
+    "title": "Cherry Blossom Tree",
+    "page": "https://polyfork.dev/asset/cherry-blossom-tree-3f7ab7",
+    "glb": "https://polyfork.dev/cdn/cherry-blossom-tree-3f7ab7.glb",
+    "path": "models/cherry.glb",
+    "credit": "Cherry Blossom Tree by Polyfork, CC BY 4.0",
+    "bytes": 72332
+  },
+  {
+    "alias": "maple",
+    "id": "maple-tree-65fa12",
+    "title": "Maple Tree",
+    "page": "https://polyfork.dev/asset/maple-tree-65fa12",
+    "glb": "https://polyfork.dev/cdn/maple-tree-65fa12.glb",
+    "path": "models/maple.glb",
+    "credit": "Maple Tree by Polyfork, CC BY 4.0",
+    "bytes": 49844
+  },
+  {
+    "alias": "hedge",
+    "id": "clipped-boundary-hedge-run-c9027b",
+    "title": "Clipped Boundary Hedge Run",
+    "page": "https://polyfork.dev/asset/clipped-boundary-hedge-run-c9027b",
+    "glb": "https://polyfork.dev/cdn/clipped-boundary-hedge-run-c9027b.glb",
+    "path": "models/hedge.glb",
+    "credit": "Clipped Boundary Hedge Run by Polyfork, CC BY 4.0",
+    "bytes": 61328
+  },
+  {
+    "alias": "shrub",
+    "id": "trimmed-foundation-shrub-616ce0",
+    "title": "Trimmed Foundation Shrub",
+    "page": "https://polyfork.dev/asset/trimmed-foundation-shrub-616ce0",
+    "glb": "https://polyfork.dev/cdn/trimmed-foundation-shrub-616ce0.glb",
+    "path": "models/shrub.glb",
+    "credit": "Trimmed Foundation Shrub by Polyfork, CC BY 4.0",
+    "bytes": 67320
+  },
+  {
+    "alias": "flowers",
+    "id": "flower-bed-708e73",
+    "title": "Flower Bed",
+    "page": "https://polyfork.dev/asset/flower-bed-708e73",
+    "glb": "https://polyfork.dev/cdn/flower-bed-708e73.glb",
+    "path": "models/flowers.glb",
+    "credit": "Flower Bed by Polyfork, CC BY 4.0",
+    "bytes": 104116
+  },
+  {
+    "alias": "bench",
+    "id": "park-bench-dc8b62",
+    "title": "Park Bench",
+    "page": "https://polyfork.dev/asset/park-bench-dc8b62",
+    "glb": "https://polyfork.dev/cdn/park-bench-dc8b62.glb",
+    "path": "models/bench.glb",
+    "credit": "Park Bench by Polyfork, CC BY 4.0",
+    "bytes": 87936
+  },
+  {
+    "alias": "lilies",
+    "id": "lily-pad-cluster-457382",
+    "title": "Lily Pad Cluster",
+    "page": "https://polyfork.dev/asset/lily-pad-cluster-457382",
+    "glb": "https://polyfork.dev/cdn/lily-pad-cluster-457382.glb",
+    "path": "models/lilies.glb",
+    "credit": "Lily Pad Cluster by Polyfork, CC BY 4.0",
+    "bytes": 138056
+  },
+  {
+    "alias": "box",
+    "id": "cardboard-delivery-box-59cc68",
+    "title": "Cardboard Delivery Box",
+    "page": "https://polyfork.dev/asset/cardboard-delivery-box-59cc68",
+    "glb": "https://polyfork.dev/cdn/cardboard-delivery-box-59cc68.glb",
+    "path": "models/box.glb",
+    "credit": "Cardboard Delivery Box by Polyfork, CC BY 4.0",
+    "bytes": 48088
+  },
+  {
+    "alias": "lamp",
+    "id": "street-lamp-29f365",
+    "title": "Street Lamp",
+    "page": "https://polyfork.dev/asset/street-lamp-29f365",
+    "glb": "https://polyfork.dev/cdn/street-lamp-29f365.glb",
+    "path": "models/lamp.glb",
+    "credit": "Street Lamp by Polyfork, CC BY 4.0",
+    "bytes": 44740
+  },
+  {
+    "alias": "pavilion",
+    "id": "civic-dome-pavilion-97ea07",
+    "title": "Civic Dome Pavilion",
+    "page": "https://polyfork.dev/asset/civic-dome-pavilion-97ea07",
+    "glb": "https://polyfork.dev/cdn/civic-dome-pavilion-97ea07.glb",
+    "path": "models/pavilion.glb",
+    "credit": "Civic Dome Pavilion by Polyfork, CC BY 4.0",
+    "bytes": 133096
+  },
+  {
+    "alias": "planter",
+    "id": "flower-planter-500ed2",
+    "title": "Flower Planter",
+    "page": "https://polyfork.dev/asset/flower-planter-500ed2",
+    "glb": "https://polyfork.dev/cdn/flower-planter-500ed2.glb",
+    "path": "models/planter.glb",
+    "credit": "Flower Planter by Polyfork, CC BY 4.0",
+    "bytes": 70756
+  },
+  {
+    "alias": "shed",
+    "id": "backyard-garden-shed-38d79f",
+    "title": "Backyard Garden Shed",
+    "page": "https://polyfork.dev/asset/backyard-garden-shed-38d79f",
+    "glb": "https://polyfork.dev/cdn/backyard-garden-shed-38d79f.glb",
+    "path": "models/shed.glb",
+    "credit": "Backyard Garden Shed by Polyfork, CC BY 4.0",
+    "bytes": 114240
+  },
+  {
+    "alias": "birdbath",
+    "id": "garden-birdbath-9671de",
+    "title": "Garden Birdbath",
+    "page": "https://polyfork.dev/asset/garden-birdbath-9671de",
+    "glb": "https://polyfork.dev/cdn/garden-birdbath-9671de.glb",
+    "path": "models/birdbath.glb",
+    "credit": "Garden Birdbath by Polyfork, CC BY 4.0",
+    "bytes": 64956
+  }
+]
