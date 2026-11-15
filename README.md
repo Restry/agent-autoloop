@@ -47,3 +47,5 @@ python3 -m http.server 8765 --bind 127.0.0.1 --directory dist
 三座工作站使用有厚度与倒角的品牌图标网格，替换圆球和文字贴片。Codex 图标来自 Devicon；Claude 和 GitHub Copilot 来自 Simple Icons，来源和许可见 `dist/icons/NOTICE.md`。
 
 演示任务按工作区分配：设计室使用 Claude，开发室使用 Codex，验证室使用 GitHub Copilot。三个 Agent 均有独立的传送带、包裹颜色、任务计数和执行状态。
+
+Claude 工作站现在直接使用用户提供的 `1.glb` 默认场景：橙色圆角方形底座与白色立体标志。Codex、GitHub Copilot 使用相同风格的圆角厚底座。每座工作站保留两道大圆环，并分别旋转。

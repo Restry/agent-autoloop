@@ -65,16 +65,25 @@ function placeModel(name,x,y,z,targetSize=1,dimension='width',parent=scene,dynam
  const source=modelLibrary.get(name),obj=new T.Group(),content=source.root.clone(true);content.position.sub(source.offset);obj.add(content);const measure=dimension==='height'?source.size.y:Math.max(source.size.x,source.size.z);obj.scale.setScalar(targetSize/measure);obj.rotation.y=rotation;obj.position.set(x,y,z);obj.traverse(o=>{if(o.isMesh)o.userData.static=!dynamic;});parent.add(obj);return obj;
 }
 
+const claudeReference=await loader.loadAsync('./icons/claude-reference.glb');
 const emblemLibrary=new Map(),svgLoader=new SVGLoader();
 try{await Promise.all(agentDefinitions.map(async def=>{const response=await fetch('./icons/'+def.icon+'.svg');if(!response.ok)throw new Error(def.name+' 图标加载失败');const data=svgLoader.parse(await response.text());const vb=(data.xml.getAttribute('viewBox')||'0 0 24 24').split(/[ ,]+/).map(Number),size=vb[2];const geometries=[];for(const path of data.paths){for(const shape of SVGLoader.createShapes(path)){const geometry=new T.ExtrudeGeometry(shape,{depth:size*.1,bevelEnabled:true,bevelThickness:size*.006,bevelSize:size*.0045,bevelSegments:3,curveSegments:20,steps:1});geometries.push(geometry);}}emblemLibrary.set(def.key,geometries);}));}catch(error){$('#loading').innerHTML='<strong>Agent 图标加载失败</strong><span>请刷新页面重试。</span>';throw error;}
 function makeEmblem(def,parent){
- const pivot=new T.Group(),body=new T.Group();pivot.add(body);parent.add(pivot);
- const front=new T.MeshStandardMaterial({color:def.face,roughness:.3,metalness:.35,emissive:def.color,emissiveIntensity:.06});
- const edge=new T.MeshStandardMaterial({color:def.edge,roughness:.35,metalness:.55});
- emblemLibrary.get(def.key).forEach(geometry=>mesh(geometry,[front,edge],0,0,0,body,true));
- const bounds=new T.Box3().setFromObject(body),center=bounds.getCenter(new T.Vector3()),size=bounds.getSize(new T.Vector3());
- body.children.forEach(part=>part.position.sub(center));const scale=2.5/Math.max(size.x,size.y);body.scale.set(scale,-scale,scale);
- pivot.position.y=4.25;pivot.rotation.set(-.38,.36,0);pivot.userData.frontMaterial=front;return pivot;
+ const pivot=new T.Group();parent.add(pivot);
+ if(def.key==='claude'){
+  const model=claudeReference.scene.clone(true);const bounds=new T.Box3().setFromObject(model),center=bounds.getCenter(new T.Vector3()),size=bounds.getSize(new T.Vector3());
+  model.position.sub(center);const holder=new T.Group();holder.add(model);holder.scale.setScalar(2.7/Math.max(size.x,size.y));pivot.add(holder);
+  model.traverse(o=>{if(o.isMesh){o.userData.static=false;o.castShadow=true;o.receiveShadow=true;o.material=o.material.clone();if(o.material.name.startsWith('White')){o.material.emissive.set('#fff8e8');o.material.emissiveIntensity=.02;pivot.userData.frontMaterial=o.material;}}});
+  pivot.userData.baseYaw=.08;
+ }else{
+  // 采用参考模型的圆角方形徽章结构：厚底座和白色立体品牌标志。
+  const shape=new T.Shape(),h=1.2,r=.4;shape.moveTo(-h+r,-h);shape.lineTo(h-r,-h);shape.quadraticCurveTo(h,-h,h,-h+r);shape.lineTo(h,h-r);shape.quadraticCurveTo(h,h,h-r,h);shape.lineTo(-h+r,h);shape.quadraticCurveTo(-h,h,-h,h-r);shape.lineTo(-h,-h+r);shape.quadraticCurveTo(-h,-h,-h+r,-h);
+  const baseGeometry=new T.ExtrudeGeometry(shape,{depth:.38,bevelEnabled:true,bevelThickness:.12,bevelSize:.12,bevelSegments:5,curveSegments:16,steps:1});baseGeometry.translate(0,0,-.19);
+  const face=new T.MeshStandardMaterial({color:def.face,roughness:.43,metalness:.12});const side=new T.MeshStandardMaterial({color:def.edge,roughness:.45,metalness:.1});mesh(baseGeometry,[face,side],0,0,0,pivot,true);
+  const logo=new T.Group();pivot.add(logo);const front=new T.MeshStandardMaterial({color:'#fffaf1',roughness:.4,metalness:.08,emissive:'#fff8e8',emissiveIntensity:.02}),edge=new T.MeshStandardMaterial({color:'#e3e2d7',roughness:.43,metalness:.12});
+  emblemLibrary.get(def.key).forEach(geometry=>mesh(geometry,[front,edge],0,0,0,logo,true));const bounds=new T.Box3().setFromObject(logo),center=bounds.getCenter(new T.Vector3()),size=bounds.getSize(new T.Vector3());logo.children.forEach(part=>part.position.sub(center));const scale=2/Math.max(size.x,size.y);logo.scale.set(scale,-scale,scale);logo.position.z=.39;pivot.userData.frontMaterial=front;pivot.userData.baseYaw=.28;
+ }
+ pivot.position.y=4.25;pivot.rotation.set(-.22,pivot.userData.baseYaw,0);return pivot;
 }
 
 // 地形、道路与微缩景观。
@@ -190,12 +199,12 @@ const columnMat=new T.ShaderMaterial({uniforms:{uColor:{value:new T.Color(color)
 const column=mesh(new T.CylinderGeometry(1.38,2.05,4.2,64,1,true),columnMat,0,3.3,0,root,true);column.castShadow=false;
 const emblem=makeEmblem(def,root);
 const rings=new T.Group();rings.position.set(0,4.25,-.2);root.add(rings);
-const orbitMaterial=trim.clone();orbitMaterial.transparent=true;orbitMaterial.opacity=.32;
-for(let i=0;i<2;i++){const a=torus(1.65+i*.17,.018,orbitMaterial,0,0,0,rings,true);a.rotation.set(.55+i*.8,.6+i*.7,.4+i*.8);a.castShadow=false;}
+const orbitMaterial=new T.MeshStandardMaterial({color:'#dbe5dd',roughness:.3,metalness:.62,emissive:def.color,emissiveIntensity:.08});
+for(let i=0;i<2;i++){const a=torus(2.05+i*.22,.038,orbitMaterial,0,0,0,rings,true);a.rotation.set(.55+i*.8,.6+i*.7,.4+i*.8);a.castShadow=false;}
 glow(x,4.1,z,color,3,.32);groundGlow(x,z,color,10,.12);
 for(let i=0;i<8;i++){const a=i/8*Math.PI*2;cyl(.07,.1,.55,trim,Math.cos(a)*3.65,.76,Math.sin(a)*3.65,root);ball(.09,m,Math.cos(a)*3.65,1.08,Math.sin(a)*3.65,root);}
 const light=new T.PointLight(color,25,11,2);light.position.set(x,3,z);scene.add(light);
-label(name,x,6.2,z,'agent',()=>focusAgent(index));agents[index]={...def,name,x,z,rings,emblem,columnMat,light,root};
+label(name,x,7.0,z,'agent',()=>focusAgent(index));agents[index]={...def,name,x,z,rings,emblem,columnMat,light,root};
 }
 agentDefinitions.forEach((def,i)=>makeAgent(def.name,def.x,def.z,def.color,[violet,amber,cyan][i],i));
 
@@ -304,7 +313,7 @@ function lighting(day){
  hemi.color.set(day?'#fffdf4':'#c1d5ff');hemi.groundColor.set(day?'#a8b797':'#708876');hemi.intensity=day?2:1.8;
  moon.intensity=day?2.5:1.5;moon.color.set(day?'#fff1d8':'#bfd2ff');renderer.toneMappingExposure=day?.96:1.06;bloom.strength=day?.14:.28;
  warm.emissiveIntensity=day?.25:2.4;softWarm.emissiveIntensity=day?.1:.6;cool.emissiveIntensity=day?.7:1.7;violet.emissiveIntensity=day?.25:1.9;amber.emissiveIntensity=day?.25:1.9;violet.color.set(day?'#8975c4':'#c2c5ff');amber.color.set(day?'#c68b45':'#ffd3a5');
- nightEffects.forEach(o=>o.visible=!day);fireflies.visible=!day;hubLight.intensity=day?1:14;agents.forEach(a=>{a.light.intensity=day?2:20;a.columnMat.blending=day?T.NormalBlending:T.AdditiveBlending;a.columnMat.needsUpdate=true;a.emblem.userData.frontMaterial.emissiveIntensity=day?.06:.32;});
+ nightEffects.forEach(o=>o.visible=!day);fireflies.visible=!day;hubLight.intensity=day?1:14;agents.forEach(a=>{a.light.intensity=day?2:20;a.columnMat.blending=day?T.NormalBlending:T.AdditiveBlending;a.columnMat.needsUpdate=true;a.emblem.userData.frontMaterial.emissiveIntensity=day?.02:.15;});
  cyan.emissiveIntensity=day?.25:1.9;cyan.color.set(day?'#589ca8':'#8bdbdf');
  $('#simtime').textContent=day?'10:24':'20:42';
 }
@@ -331,7 +340,7 @@ function animate(now){requestAnimationFrame(animate);const dt=Math.min((now-last
 if(cameraTween){const t=cameraTween.duration===0?1:Math.min((now-cameraTween.start)/cameraTween.duration,1),k=t*t*(3-2*t);controls.target.copy(cameraTween.from).lerp(cameraTween.to,k);camera.position.copy(cameraTween.positionFrom).lerp(cameraTween.positionTo,k);camera.zoom=T.MathUtils.lerp(cameraTween.zoomFrom,cameraTween.zoomTo,k);camera.updateProjectionMatrix();camera.lookAt(controls.target);if(t===1)cameraTween=null;}
 
 beltTexture.offset.x=-sim*.32;beltBackTexture.offset.x=sim*.32;hubCore.rotation.y=sim*.45;core.rotation.z=sim*.2;coreRing2.rotation.y=sim*.4;
-agents.forEach((a,i)=>{a.rings.rotation.y=sim*(i===0?.22:-.18);a.rings.rotation.z=Math.sin(sim*.3)*.12;a.emblem.position.y=4.25+Math.sin(sim*.8+i)*.09;a.emblem.rotation.y=.36+Math.sin(sim*.32+i)*.32;a.columnMat.uniforms.uTime.value=sim;});ripples.forEach((a,i)=>{const k=((sim*.18+i*.33)%1);a.scale.setScalar(.4+k*1.8);a.material.opacity=(1-k)*.12;});fireflies.rotation.y=Math.sin(sim*.025)*.02;
+agents.forEach((a,i)=>{a.rings.rotation.y=sim*(i===0?.22:-.18);a.rings.rotation.z=Math.sin(sim*.3)*.12;a.emblem.position.y=4.25+Math.sin(sim*.8+i)*.09;a.emblem.rotation.y=a.emblem.userData.baseYaw+Math.sin(sim*.32+i)*.22;a.rings.children[0].rotation.y=sim*.28;a.rings.children[1].rotation.y=-sim*.23;a.columnMat.uniforms.uTime.value=sim;});ripples.forEach((a,i)=>{const k=((sim*.18+i*.33)%1);a.scale.setScalar(.4+k*1.8);a.material.opacity=(1-k)*.12;});fireflies.rotation.y=Math.sin(sim*.025)*.02;
 if(sim-lastDispatch>6.8){lastDispatch=sim;autoIndex=(autoIndex+1)%projects.length;dispatch(autoIndex);}
 updateTasks();projectLabels();composer.render();frame++;if(frame===2){$('#loading').classList.add('done');window.__townReady=true;}
 if(sim-lastUi>1){lastUi=sim;const minutes=(daylight?24:42)+Math.floor(sim/30);$('#simtime').textContent=((daylight?10:20)+Math.floor(minutes/60)).toString().padStart(2,'0')+':'+(minutes%60).toString().padStart(2,'0');}
