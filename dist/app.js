@@ -1,4 +1,5 @@
 import * as T from 'three';
+import {roundedRoute} from './routes.js';
 import {OrbitControls} from './vendor/OrbitControls.js';
 import {mergeGeometries} from './vendor/BufferGeometryUtils.js';
 import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
@@ -87,9 +88,12 @@ function makeEmblem(def,parent){
 }
 
 // 地形、道路与微缩景观。
-const ground=mesh(new T.PlaneGeometry(180,180),grass,0,-.1,0);ground.rotation.x=-Math.PI/2;ground.castShadow=false;
+const pondShape=new T.Shape();pondShape.moveTo(-2.9,-.9);pondShape.bezierCurveTo(-3.5,.1,-2.8,1.8,-1.2,2.1);pondShape.bezierCurveTo(0,2.5,2.8,2.1,3,.8);pondShape.bezierCurveTo(3.2,-.2,2,-.5,1.5,-1.3);pondShape.bezierCurveTo(.8,-2.3,-1.8,-2.2,-2.9,-.9);pondShape.closePath();
+const terrainShape=new T.Shape([new T.Vector2(-90,-90),new T.Vector2(90,-90),new T.Vector2(90,90),new T.Vector2(-90,90)]);
+const pondHole=new T.Path(pondShape.getPoints(90).map(v=>new T.Vector2(v.x*1.16+5,v.y*1.16-10)));terrainShape.holes.push(pondHole);
+const ground=mesh(new T.ShapeGeometry(terrainShape),grass,0,-.1,0);ground.rotation.x=-Math.PI/2;ground.castShadow=false;const groundUV=ground.geometry.attributes.uv;for(let i=0;i<groundUV.count;i++)groundUV.setXY(i,(groundUV.getX(i)+90)/180,(groundUV.getY(i)+90)/180);
 function road(points,width=1.7){const curve=new T.CatmullRomCurve3(points.map(([x,z])=>point(x,.01,z)),false,'catmullrom',.15);const a=mesh(new T.TubeGeometry(curve,80,width/2,8,false),asphalt);a.scale.y=.05;a.castShadow=false;return curve;}
-road([[-23,0],[-14,0],[-8,0],[0,0],[4,0]],2.4);road([[-11,-16],[-11,-8],[-11,0],[-11,9],[-11,17]],1.8);road([[-22,-10],[-20,-9],[-11,-9],[-5,-9],[-3,-8]],1.6);road([[-23,9],[-18,9],[-11,9],[-5,9],[-3,10]],1.6);road([[4,0],[9,-4],[15,-8]],1.4);road([[4,0],[10,5],[17,9]],1.4);
+road([[-23,0],[-14,0],[-8,0],[0,0],[4,0]],2.4);road([[-11,-16],[-11,-8],[-11,0],[-11,9],[-11,17]],1.8);road([[-22,-10],[-20,-9],[-11,-9],[-5,-9],[-3,-8]],1.6);road([[-23,9],[-18,9],[-11,9],[-5,9],[-3,10]],1.6);
 function lamp(x,z,h=1.65){placeModel('lamp',x,0,z,h,'height');ball(.055,warm,x,h*.87,z);glow(x,h*.87,z,'#ffd598',.8,.35);groundGlow(x,z,'#f8cc88',4.8,.3);}
 for(let x=-21;x<1;x+=4.3){lamp(x,1.5);lamp(x,-1.5);}for(let z=-14;z<16;z+=4.8){if(Math.abs(z)>2){lamp(-12.25,z);lamp(-9.7,z);}}
 function tree(x,z,s=1,type=0){const names=['pineHD','birchHD','mapleHD','pineHD'];return placeModel(names[type%4],x,-.04,z,3.2*s,'height',scene,false,rand()*Math.PI*2);}
@@ -98,14 +102,33 @@ for(let i=0;i<100;i++){const x=(rand()-.5)*90,z=(rand()-.5)*65;if((x>-25&&x<31&&
 [[-24,-15],[-23,14],[-3,-14],[8,-13],[29,-8],[10,15],[0,-10],[-24,-3],[-23,4]].forEach(([x,z],i)=>tree(x,z,.65+rand()*.22,i%3));
 function bush(x,z,w=1){return placeModel('shrubHD',x,0,z,w,'width',scene,false,rand()*6);}
 for(let i=0;i<35;i++){const x=(rand()-.5)*48,z=(rand()-.5)*33;if(Math.abs(x+11)<2||Math.abs(z)<2)continue;if((x>0&&x<11&&z>7)||x<-22)bush(x,z,.6+rand()*.5);}
-placeModel('bench',7.7,.02,12.8,1.7,'width',scene,false,-.6);placeModel('bench',9.4,.02,10.4,1.7,'width',scene,false,-1.3);
-placeModel('flowers',7.4,0,14.3,1.7);placeModel('flowers',10.7,0,10,1.4);placeModel('birdbath',2,.05,13.6,.75,'height');
-// 水池及环绕的石块。
-const pondShape=new T.Shape();pondShape.moveTo(-2,0);pondShape.bezierCurveTo(-3,-2,-.8,-3,1,-2.2);pondShape.bezierCurveTo(4,-2,3,0,1.7,1.3);pondShape.bezierCurveTo(0,2,-2,1.6,-2,0);
-const pond=mesh(new T.ShapeGeometry(pondShape,40),water,5,.012,10);pond.rotation.x=-Math.PI/2;
-for(let i=0;i<29;i++){const a=i/29*Math.PI*2;const b=ball(.2+rand()*.12,stone,5+Math.cos(a)*2.65,.08,10+Math.sin(a)*2.1);b.scale.y=.4;}
-placeModel('lilies',4,.06,10,1.4);placeModel('lilies',5.8,.06,9.4,.9);
-const ripples=[];for(let i=0;i<3;i++){let m=new T.MeshBasicMaterial({color:'#89c8b7',transparent:true,opacity:.14,depthWrite:false});ripples.push(torus(.5+i*.5,.009,m,5,.04,10,scene,true));}
+placeModel('bench',7.7,.02,12.8,1.7,'width',scene,false,-.6);placeModel('bench',1.05,.02,10.5,1.7,'width',scene,false,Math.PI/2);
+placeModel('flowers',7.4,0,14.3,1.7);placeModel('flowers',4,0,13.5,1.4);placeModel('birdbath',9,.05,14,.75,'height');
+// 下沉的景观池：地面开孔、池底、低石岸和独立水面。
+const pondStoneMaterials=[mat('pondStone1','#a7aaa0',.95),mat('pondStone2','#b7b7a8',.92),mat('pondStone3','#969f96',.96)];
+const pondBed=mat('pondBed','#386f67',.95),pondLiner=mat('pondLiner','#6b8274',.9);
+const bed=mesh(new T.ShapeGeometry(pondShape,80),pondBed,5,-.78,10);bed.rotation.x=-Math.PI/2;bed.scale.set(1.1,1.1,1);
+function pondBand(inner,outer,yInner,yOuter,material){const vertices=[],indices=[],contour=pondShape.getSpacedPoints(120);for(let i=0;i<contour.length;i++){const p=contour[i];vertices.push(5+p.x*inner,yInner,10-p.y*inner,5+p.x*outer,yOuter,10-p.y*outer);if(i<contour.length-1){const k=i*2;indices.push(k,k+1,k+2,k+1,k+3,k+2);}}const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(vertices,3));g.setIndex(indices);g.computeVertexNormals();const m=material.clone();m.side=T.DoubleSide;return mesh(g,m);}
+pondBand(.91,1.17,-.62,-.08,pondLiner);
+// 矮而宽的石板收边，避免一圈竖立的“鹅卵石”。
+for(let i=0;i<34;i++){const a=pondShape.getPointAt((i+.035)/34),b=pondShape.getPointAt((i+.965)/34),outer=1.17+.018*Math.sin(i*2.7),tile=new T.Shape([a.clone().multiplyScalar(1.015),a.clone().multiplyScalar(outer),b.clone().multiplyScalar(outer),b.clone().multiplyScalar(1.015)]);const g=new T.ExtrudeGeometry(tile,{depth:.11,bevelEnabled:true,bevelThickness:.018,bevelSize:.014,bevelSegments:2,steps:1});const o=mesh(g,pondStoneMaterials[i%3],5,-.08+Math.sin(i*1.7)*.009,10);o.rotation.x=-Math.PI/2;}
+const pondWaterMaterial=new T.ShaderMaterial({uniforms:{uTime:{value:0},uDay:{value:1},uDeep:{value:new T.Color('#286c72')},uShallow:{value:new T.Color('#78b5a2')}},transparent:true,depthWrite:false,side:T.DoubleSide,
+ vertexShader:'varying vec3 vWorld; varying vec2 vLocal; void main(){vLocal=position.xy;vec4 world=modelMatrix*vec4(position,1.);vWorld=world.xyz;gl_Position=projectionMatrix*viewMatrix*world;}',
+ fragmentShader:`uniform float uTime;uniform float uDay;uniform vec3 uDeep;uniform vec3 uShallow;varying vec3 vWorld;varying vec2 vLocal;
+ void main(){vec2 p=vLocal;float t=uTime*.32;float wave=sin(p.x*4.2+p.y*1.6+t)*.025+sin(p.y*5.3-p.x*1.2-t*.7)*.018;
+ vec3 n=normalize(vec3(cos(p.x*4.2+p.y*1.6+t)*.1,1.,cos(p.y*5.3-p.x*1.2-t*.7)*.09));vec3 viewDir=normalize(cameraPosition-vWorld);float fresnel=pow(1.-max(dot(n,viewDir),0.),3.);
+ float depth=clamp(length(p/vec2(3.25,2.4)),0.,1.);vec3 color=mix(uDeep,uShallow,pow(depth,2.)*.7+wave);
+ float shimmer=pow(max(0.,sin(p.x*7.+p.y*2.+t)+sin(p.y*8.-p.x*3.-t*.7))*.5,8.);color+=vec3(.045,.065,.055)*shimmer;
+ color=mix(color,vec3(.64,.79,.81),fresnel*.55);float highlight=pow(max(dot(reflect(normalize(vec3(.3,-1.,-.4)),n),viewDir),0.),90.);color+=vec3(.8,.85,.7)*highlight*.25;color*=mix(.38,1.,uDay);
+ gl_FragColor=vec4(color,.91);
+ #include <tonemapping_fragment>
+ #include <colorspace_fragment>
+ }`});
+const pond=mesh(new T.ShapeGeometry(pondShape,80),pondWaterMaterial,5,-.18,10,scene,true);pond.rotation.x=-Math.PI/2;pond.castShadow=false;
+placeModel('lilies',3.55,-.15,10.8,.82);placeModel('lilies',5.7,-.15,10.9,.48);
+const reeds=mat('reeds','#56774a',.9),reedTips=mat('reedTips','#756241',.95);
+for(const [x,z] of [[2.1,8.5],[6.6,7.7],[8.05,9.2]]){for(let j=0;j<7;j++){const dx=(rand()-.5)*.38,dz=(rand()-.5)*.38,h=.42+rand()*.45;beam(point(x+dx,0,z+dz),point(x+dx+.08,h,z+dz-.04),.012,reeds);cyl(.025,.025,.13,reedTips,x+dx+.08,h+.04,z+dz-.04,scene,false,6);}}
+for(const [x,z,scale] of [[2.25,8.45,.48],[7.2,7.9,.4],[8.35,9.4,.35]]){const rock=mesh(new T.IcosahedronGeometry(1,1),pondStoneMaterials[0],x,.06,z);rock.scale.set(scale,.14,scale*.7);rock.rotation.y=rand()*3;}
 
 const projects=[
 {name:'曙光',sub:'家庭影像与生活记录',task:'构建相册时间线',x:-18,z:-9,agent:0,type:0},
@@ -216,28 +239,28 @@ beltCtx.strokeStyle='#92a18b';beltCtx.lineWidth=2;beltCtx.beginPath();beltCtx.mo
 const beltTexture=new T.CanvasTexture(beltCanvas);beltTexture.wrapS=beltTexture.wrapT=T.RepeatWrapping;beltTexture.colorSpace=T.SRGBColorSpace;beltTexture.anisotropy=4;
 const beltBackTexture=beltTexture.clone();beltBackTexture.needsUpdate=true;
 const beltMaterial=mat('belt','#b4c0b4',.8,.15,{map:beltTexture});const beltBackMaterial=mat('beltBack','#9cac9e',.8,.15,{map:beltBackTexture});
-function makeCurve(points){return new T.CatmullRomCurve3(points.map(v=>point(...v)),false,'catmullrom',.12);}
+function makeCurve(points,radius=1.2){return roundedRoute(points,radius);}
 function beltStrip(curve,offset,width,material,height=0){const positions=[],normals=[],uvs=[],indices=[];const n=Math.ceil(curve.getLength()*9),length=curve.getLength();
 for(let i=0;i<=n;i++){const t=i/n,p=curve.getPointAt(t),d=curve.getTangentAt(t),side=point(-d.z,0,d.x).normalize();for(let j=0;j<2;j++){const q=p.clone().addScaledVector(side,offset+(j-.5)*width);q.y+=height;positions.push(q.x,q.y,q.z);normals.push(0,1,0);uvs.push(t*length*.7,j);}if(i<n){let k=i*2;indices.push(k,k+1,k+2,k+1,k+3,k+2);}}
 const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(positions,3));geo.setAttribute('normal',new T.Float32BufferAttribute(normals,3));geo.setAttribute('uv',new T.Float32BufferAttribute(uvs,2));geo.setIndex(indices);return mesh(geo,material);}
-function pipeline(points){const c=Array.isArray(points)?makeCurve(points):points,length=c.getLength();
+function pipeline(points,radius=1.2){const c=Array.isArray(points)?makeCurve(points,radius):points,length=c.getLength();
 beltStrip(c,0,1.03,trim,-.09);beltStrip(c,.235,.42,beltMaterial);beltStrip(c,-.235,.42,beltBackMaterial);beltStrip(c,0,.035,rail,.045);
-for(const offset of [-.52,.52]){const railCurve=new T.CatmullRomCurve3(c.getPoints(Math.ceil(length*8)).map((p,i,arr)=>{const d=c.getTangent(i/(arr.length-1));return p.clone().addScaledVector(point(-d.z,0,d.x).normalize(),offset).add(point(0,.025,0));}));mesh(new T.TubeGeometry(railCurve,Math.ceil(length*8),.038,5,false),rail);}
+for(const offset of [-.52,.52]){const count=Math.ceil(length*20),points=[];for(let i=0;i<=count;i++){const t=i/count,p=c.getPointAt(t),d=c.getTangentAt(t);points.push(p.addScaledVector(point(-d.z,0,d.x).normalize(),offset).add(point(0,.025,0)));}const railCurve=new T.CatmullRomCurve3(points,false,'centripetal');mesh(new T.TubeGeometry(railCurve,count,.038,5,false),rail);}
 for(let i=0;i<=length/1.6;i++){const t=Math.min(i*1.6/length,1),p=c.getPointAt(t),d=c.getTangentAt(t),side=point(-d.z,0,d.x).normalize();beam(p.clone().addScaledVector(side,-.49).add(point(0,-.04,0)),p.clone().addScaledVector(side,.49).add(point(0,-.04,0)),.065,dark);for(const sign of [-1,1]){const v=p.clone().addScaledVector(side,sign*.44);box(.055,v.y-.1,.055,trim,v.x,(v.y-.1)/2,v.z);box(.18,.055,.2,stone,v.x,.02,v.z);}}
 return c;}
 const trunkX=-9.1,feedZ=.3,beltY=.58;
-pipeline([[trunkX,beltY,-6],[trunkX,beltY,19]]);
+pipeline([[trunkX,beltY,-6],[trunkX,beltY,20]]);
 const feed=pipeline([[trunkX,beltY,feedZ],[-5,beltY,feedZ],[hub.x-2.65,.85,feedZ]]);
 projects.forEach((p,i)=>{
-const px=p.x+3.5,joinZ=p.z+3.6;
+const px=p.x+3.5,joinZ=p.z+4.2;
 // 院落右侧的小传送带，连接三个工作区。
 pipeline([[px,beltY,p.z-1.8],[px,beltY,p.z+1.7]]);
-const branch=pipeline([[px,beltY,p.z+1.7],[px,beltY,p.z+3],[px-.45,beltY,joinZ],[trunkX,beltY,joinZ]]);
+const branch=pipeline([[px,beltY,p.z+1.7],[px,beltY,joinZ],[trunkX,beltY,joinZ]],1.15);
 const trunkPart=new T.LineCurve3(point(trunkX,beltY,joinZ),point(trunkX,beltY,feedZ));
 const route=new T.CurvePath();route.add(branch);route.add(trunkPart);route.add(feed);p.route=route;p.workspaces.forEach((area,j)=>{const r=new T.CurvePath();r.add(new T.LineCurve3(point(p.x+2.95,beltY,p.z+bayOffsets[j]),point(px,beltY,p.z+bayOffsets[j])));if(j<2)r.add(new T.LineCurve3(point(px,beltY,p.z+bayOffsets[j]),point(px,beltY,p.z+1.7)));route.curves.forEach(c=>r.add(c));area.route=r;});
 box(1.1,.1,1.1,trim,trunkX,beltY-.06,joinZ);box(.95,.025,.95,black,trunkX,beltY,joinZ);
 });
-agents.forEach((a,i)=>{const startZ=i===0?1.4:i===1?-1.4:0,turnZ=i===0?3:i===1?-3:0;a.route=pipeline([[hub.x+2.7,.85,startZ],[8.5,.7,turnZ],[a.x-4,.7,a.z],[a.x-2.1,1.3,a.z]]);});
+agents.forEach((a,i)=>{const startZ=i===0?1.4:i===1?-1.4:0,turnZ=i===0?3:i===1?-3:0;a.route=pipeline([[hub.x+2.7,.85,startZ],[8.5,.7,turnZ],[a.x-6.4,.7,a.z],[a.x-2.1,1.3,a.z]],2);const walkPoints=a.route.getSpacedPoints(Math.ceil(a.route.getLength()*12)).map(v=>new T.Vector3(v.x,.012,v.z));beltStrip(new T.CatmullRomCurve3(walkPoints,false,'centripetal'),0,1.45,asphalt);});
 // 草地上的零星微光。
 const fireCount=75,firePositions=new Float32Array(fireCount*3);for(let i=0;i<fireCount;i++){firePositions[i*3]=(rand()-.5)*48;firePositions[i*3+1]=.3+rand()*3;firePositions[i*3+2]=(rand()-.5)*32;}const fireGeo=new T.BufferGeometry();fireGeo.setAttribute('position',new T.BufferAttribute(firePositions,3));const fireflies=new T.Points(fireGeo,new T.PointsMaterial({color:'#dbdaa5',size:.055,transparent:true,opacity:.55,depthWrite:false,blending:T.AdditiveBlending}));scene.add(fireflies);
 
@@ -314,6 +337,7 @@ function lighting(day){
  moon.intensity=day?2.5:1.5;moon.color.set(day?'#fff1d8':'#bfd2ff');renderer.toneMappingExposure=day?.96:1.06;bloom.strength=day?.14:.28;
  warm.emissiveIntensity=day?.25:2.4;softWarm.emissiveIntensity=day?.1:.6;cool.emissiveIntensity=day?.7:1.7;violet.emissiveIntensity=day?.25:1.9;amber.emissiveIntensity=day?.25:1.9;violet.color.set(day?'#8975c4':'#c2c5ff');amber.color.set(day?'#c68b45':'#ffd3a5');
  nightEffects.forEach(o=>o.visible=!day);fireflies.visible=!day;hubLight.intensity=day?1:14;agents.forEach(a=>{a.light.intensity=day?2:20;a.columnMat.blending=day?T.NormalBlending:T.AdditiveBlending;a.columnMat.needsUpdate=true;a.emblem.userData.frontMaterial.emissiveIntensity=day?.02:.15;});
+ pondWaterMaterial.uniforms.uDay.value=day?1:0;
  cyan.emissiveIntensity=day?.25:1.9;cyan.color.set(day?'#589ca8':'#8bdbdf');
  $('#simtime').textContent=day?'10:24':'20:42';
 }
@@ -340,7 +364,7 @@ function animate(now){requestAnimationFrame(animate);const dt=Math.min((now-last
 if(cameraTween){const t=cameraTween.duration===0?1:Math.min((now-cameraTween.start)/cameraTween.duration,1),k=t*t*(3-2*t);controls.target.copy(cameraTween.from).lerp(cameraTween.to,k);camera.position.copy(cameraTween.positionFrom).lerp(cameraTween.positionTo,k);camera.zoom=T.MathUtils.lerp(cameraTween.zoomFrom,cameraTween.zoomTo,k);camera.updateProjectionMatrix();camera.lookAt(controls.target);if(t===1)cameraTween=null;}
 
 beltTexture.offset.x=-sim*.32;beltBackTexture.offset.x=sim*.32;hubCore.rotation.y=sim*.45;core.rotation.z=sim*.2;coreRing2.rotation.y=sim*.4;
-agents.forEach((a,i)=>{a.rings.rotation.y=sim*(i===0?.22:-.18);a.rings.rotation.z=Math.sin(sim*.3)*.12;a.emblem.position.y=4.25+Math.sin(sim*.8+i)*.09;a.emblem.rotation.y=a.emblem.userData.baseYaw+Math.sin(sim*.32+i)*.22;a.rings.children[0].rotation.y=sim*.28;a.rings.children[1].rotation.y=-sim*.23;a.columnMat.uniforms.uTime.value=sim;});ripples.forEach((a,i)=>{const k=((sim*.18+i*.33)%1);a.scale.setScalar(.4+k*1.8);a.material.opacity=(1-k)*.12;});fireflies.rotation.y=Math.sin(sim*.025)*.02;
+agents.forEach((a,i)=>{a.rings.rotation.y=sim*(i===0?.22:-.18);a.rings.rotation.z=Math.sin(sim*.3)*.12;a.emblem.position.y=4.25+Math.sin(sim*.8+i)*.09;a.emblem.rotation.y=a.emblem.userData.baseYaw+Math.sin(sim*.32+i)*.22;a.rings.children[0].rotation.y=sim*.28;a.rings.children[1].rotation.y=-sim*.23;a.columnMat.uniforms.uTime.value=sim;});pondWaterMaterial.uniforms.uTime.value=sim;fireflies.rotation.y=Math.sin(sim*.025)*.02;
 if(sim-lastDispatch>6.8){lastDispatch=sim;autoIndex=(autoIndex+1)%projects.length;dispatch(autoIndex);}
 updateTasks();projectLabels();composer.render();frame++;if(frame===2){$('#loading').classList.add('done');window.__townReady=true;}
 if(sim-lastUi>1){lastUi=sim;const minutes=(daylight?24:42)+Math.floor(sim/30);$('#simtime').textContent=((daylight?10:20)+Math.floor(minutes/60)).toString().padStart(2,'0')+':'+(minutes%60).toString().padStart(2,'0');}
