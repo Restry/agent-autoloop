@@ -15,7 +15,7 @@ python3 -m http.server 8765 --bind 127.0.0.1 --directory dist
 ## 场景
 
 - 六个项目院落。每个院落包含主楼和三个独立小工作区。
-- 圆形调度中台，以及 Claude、Codex 两座工作站。
+- 圆形调度中台，以及 Claude、Codex、GitHub Copilot 三座工作站。
 - 开放式双向传送带。纸箱在带面上移动，带面有运动纹理。
 - 模拟任务经过项目、中台、Agent、返回项目四个阶段。
 - 点击别墅后，镜头平滑拉近，显示三个独立工作区的任务。
@@ -41,3 +41,9 @@ python3 -m http.server 8765 --bind 127.0.0.1 --directory dist
 植物包括用户指定的 Trimmed Foundation Shrub，以及 Sculpted Pine、Birch Tree、Maple Tree。采用网页公开加载的 HD 预览 GLB，不是完整 HD 下载版。这四个文件适用 Polyfork 商业许可，不按 CC BY 再授权；其余免费模型保留对应署名。
 
 任务仍为模拟数据。每个工作区有独立任务定义，包裹、工作区状态和 Agent 状态使用同一任务记录。
+
+## Agent 立体图标
+
+三座工作站使用有厚度与倒角的品牌图标网格，替换圆球和文字贴片。Codex 图标来自 Devicon；Claude 和 GitHub Copilot 来自 Simple Icons，来源和许可见 `dist/icons/NOTICE.md`。
+
+演示任务按工作区分配：设计室使用 Claude，开发室使用 Codex，验证室使用 GitHub Copilot。三个 Agent 均有独立的传送带、包裹颜色、任务计数和执行状态。
