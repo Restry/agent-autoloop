@@ -50,46 +50,6 @@
     "bytes": 96216
   },
   {
-    "alias": "oak",
-    "id": "broadleaf-oak-997c22",
-    "title": "Broadleaf Oak",
-    "page": "https://polyfork.dev/asset/broadleaf-oak-997c22",
-    "glb": "https://polyfork.dev/cdn/broadleaf-oak-997c22.glb",
-    "path": "models/oak.glb",
-    "credit": "Broadleaf Oak by Polyfork, CC BY 4.0",
-    "bytes": 53860
-  },
-  {
-    "alias": "ornamental",
-    "id": "ornamental-front-yard-tree-c6781a",
-    "title": "Ornamental Front-Yard Tree",
-    "page": "https://polyfork.dev/asset/ornamental-front-yard-tree-c6781a",
-    "glb": "https://polyfork.dev/cdn/ornamental-front-yard-tree-c6781a.glb",
-    "path": "models/ornamental.glb",
-    "credit": "Ornamental Front-Yard Tree by Polyfork, CC BY 4.0",
-    "bytes": 67360
-  },
-  {
-    "alias": "cherry",
-    "id": "cherry-blossom-tree-3f7ab7",
-    "title": "Cherry Blossom Tree",
-    "page": "https://polyfork.dev/asset/cherry-blossom-tree-3f7ab7",
-    "glb": "https://polyfork.dev/cdn/cherry-blossom-tree-3f7ab7.glb",
-    "path": "models/cherry.glb",
-    "credit": "Cherry Blossom Tree by Polyfork, CC BY 4.0",
-    "bytes": 72332
-  },
-  {
-    "alias": "maple",
-    "id": "maple-tree-65fa12",
-    "title": "Maple Tree",
-    "page": "https://polyfork.dev/asset/maple-tree-65fa12",
-    "glb": "https://polyfork.dev/cdn/maple-tree-65fa12.glb",
-    "path": "models/maple.glb",
-    "credit": "Maple Tree by Polyfork, CC BY 4.0",
-    "bytes": 49844
-  },
-  {
     "alias": "hedge",
     "id": "clipped-boundary-hedge-run-c9027b",
     "title": "Clipped Boundary Hedge Run",
@@ -98,16 +58,6 @@
     "path": "models/hedge.glb",
     "credit": "Clipped Boundary Hedge Run by Polyfork, CC BY 4.0",
     "bytes": 61328
-  },
-  {
-    "alias": "shrub",
-    "id": "trimmed-foundation-shrub-616ce0",
-    "title": "Trimmed Foundation Shrub",
-    "page": "https://polyfork.dev/asset/trimmed-foundation-shrub-616ce0",
-    "glb": "https://polyfork.dev/cdn/trimmed-foundation-shrub-616ce0.glb",
-    "path": "models/shrub.glb",
-    "credit": "Trimmed Foundation Shrub by Polyfork, CC BY 4.0",
-    "bytes": 67320
   },
   {
     "alias": "flowers",
@@ -160,16 +110,6 @@
     "bytes": 44740
   },
   {
-    "alias": "pavilion",
-    "id": "civic-dome-pavilion-97ea07",
-    "title": "Civic Dome Pavilion",
-    "page": "https://polyfork.dev/asset/civic-dome-pavilion-97ea07",
-    "glb": "https://polyfork.dev/cdn/civic-dome-pavilion-97ea07.glb",
-    "path": "models/pavilion.glb",
-    "credit": "Civic Dome Pavilion by Polyfork, CC BY 4.0",
-    "bytes": 133096
-  },
-  {
     "alias": "planter",
     "id": "flower-planter-500ed2",
     "title": "Flower Planter",
@@ -198,5 +138,53 @@
     "path": "models/birdbath.glb",
     "credit": "Garden Birdbath by Polyfork, CC BY 4.0",
     "bytes": 64956
+  },
+  {
+    "alias": "shrubHD",
+    "id": "trimmed-foundation-shrub-616ce0",
+    "title": "Trimmed Foundation Shrub — HD web preview",
+    "page": "https://polyfork.dev/asset/trimmed-foundation-shrub-616ce0?edition=hd",
+    "glb": "https://polyfork.dev/cdn/trimmed-foundation-shrub-616ce0-hd-preview.glb?v=1792684064",
+    "path": "models/shrubHD.glb",
+    "edition": "HD web preview",
+    "license": "Polyfork commercial license; user has Pro. Not CC BY.",
+    "credit": "Trimmed Foundation Shrub by Polyfork (HD web preview)",
+    "bytes": 244540
+  },
+  {
+    "alias": "pineHD",
+    "id": "sculpted-pine-e45d4f",
+    "title": "Sculpted Pine — HD web preview",
+    "page": "https://polyfork.dev/asset/sculpted-pine-e45d4f?edition=hd",
+    "glb": "https://polyfork.dev/cdn/sculpted-pine-e45d4f-hd-preview.glb?v=1792830243",
+    "path": "models/pineHD.glb",
+    "edition": "HD web preview",
+    "license": "Polyfork commercial license; user has Pro. Not CC BY.",
+    "credit": "Sculpted Pine by Polyfork (HD web preview)",
+    "bytes": 735668
+  },
+  {
+    "alias": "birchHD",
+    "id": "birch-tree-181b33",
+    "title": "Birch Tree — HD web preview",
+    "page": "https://polyfork.dev/asset/birch-tree-181b33?edition=hd",
+    "glb": "https://polyfork.dev/cdn/birch-tree-181b33-hd-preview.glb?v=1792622205",
+    "path": "models/birchHD.glb",
+    "edition": "HD web preview",
+    "license": "Polyfork commercial license; user has Pro. Not CC BY.",
+    "credit": "Birch Tree by Polyfork (HD web preview)",
+    "bytes": 536756
+  },
+  {
+    "alias": "mapleHD",
+    "id": "maple-tree-65fa12",
+    "title": "Maple Tree — HD web preview",
+    "page": "https://polyfork.dev/asset/maple-tree-65fa12?edition=hd",
+    "glb": "https://polyfork.dev/cdn/maple-tree-65fa12-hd-preview.glb?v=1792691925",
+    "path": "models/mapleHD.glb",
+    "edition": "HD web preview",
+    "license": "Polyfork commercial license; user has Pro. Not CC BY.",
+    "credit": "Maple Tree by Polyfork (HD web preview)",
+    "bytes": 794704
   }
 ]

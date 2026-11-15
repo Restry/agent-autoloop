@@ -16,7 +16,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));renderer.setSize(innerWid
 const camera=new T.OrthographicCamera(-28,28,20,-20,.1,180);
 const defaultTarget=new T.Vector3(0,0,0), defaultPosition=new T.Vector3(17,33,46);
 camera.position.copy(defaultPosition);camera.lookAt(defaultTarget);
-const controls=new OrbitControls(camera,canvas);controls.target.copy(defaultTarget);controls.enableDamping=true;controls.dampingFactor=.055;controls.minPolarAngle=.4;controls.maxPolarAngle=1.12;controls.minZoom=.72;controls.maxZoom=2.5;controls.enablePan=true;controls.maxTargetRadius=15;controls.autoRotate=false;
+const controls=new OrbitControls(camera,canvas);controls.target.copy(defaultTarget);controls.enableDamping=true;controls.dampingFactor=.055;controls.minPolarAngle=.4;controls.maxPolarAngle=1.12;controls.minZoom=.72;controls.maxZoom=4.5;controls.enablePan=true;controls.maxTargetRadius=80;controls.autoRotate=false;
 const composer=new EffectComposer(renderer);composer.addPass(new RenderPass(scene,camera));const aoPass=new SSAOPass(scene,camera,innerWidth,innerHeight,16);aoPass.kernelRadius=.48;aoPass.minDistance=.001;aoPass.maxDistance=.035;aoPass.ssaoMaterial.defines.PERSPECTIVE_CAMERA=0;aoPass.depthRenderMaterial.defines.PERSPECTIVE_CAMERA=0;composer.addPass(aoPass);const bloom=new UnrealBloomPass(new T.Vector2(innerWidth,innerHeight),.38,.55,.86);composer.addPass(bloom);composer.addPass(new OutputPass());
 const hemi=new T.HemisphereLight('#fffdf4','#a8b797',2.6);scene.add(hemi);
 const moon=new T.DirectionalLight('#becce9',2.6);moon.position.set(-16,32,20);moon.castShadow=true;moon.shadow.mapSize.set(2048,2048);moon.shadow.radius=3;Object.assign(moon.shadow.camera,{left:-33,right:33,top:30,bottom:-30,near:1,far:100});moon.shadow.normalBias=.035;moon.shadow.bias=-.00015;scene.add(moon);
@@ -49,7 +49,7 @@ function beam(a,b,r,m,parent=scene,dyn=false){const delta=b.clone().sub(a);const
 function point(x,y,z){return new T.Vector3(x,y,z);}
 
 // Polyfork GLB 模型。文件随本站部署，来源和许可见 models/credits.html。
-const modelManifest=await fetch('./models/manifest.json').then(r=>{if(!r.ok)throw new Error('模型清单加载失败');return r.json();});
+const modelManifest=await fetch('./models/manifest.json?v=3').then(r=>{if(!r.ok)throw new Error('模型清单加载失败');return r.json();});
 const loader=new GLTFLoader(),modelLibrary=new Map();let modelLoaded=0;
 try{
  await Promise.all(modelManifest.map(async info=>{const gltf=await loader.loadAsync('./'+info.path);const bounds=new T.Box3().setFromObject(gltf.scene),size=bounds.getSize(new T.Vector3()),center=bounds.getCenter(new T.Vector3());gltf.scene.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;o.material.roughness=.85;o.material.metalness=Math.min(o.material.metalness,.15);}});modelLibrary.set(info.alias,{root:gltf.scene,size,offset:point(center.x,bounds.min.y,center.z)});modelLoaded++;$('#loading span').textContent='正在布置小镇 · '+modelLoaded+' / '+modelManifest.length;}));
@@ -64,11 +64,11 @@ function road(points,width=1.7){const curve=new T.CatmullRomCurve3(points.map(([
 road([[-23,0],[-14,0],[-8,0],[0,0],[4,0]],2.4);road([[-11,-16],[-11,-8],[-11,0],[-11,9],[-11,17]],1.8);road([[-22,-10],[-20,-9],[-11,-9],[-5,-9],[-3,-8]],1.6);road([[-23,9],[-18,9],[-11,9],[-5,9],[-3,10]],1.6);road([[4,0],[9,-4],[15,-8]],1.4);road([[4,0],[10,5],[17,9]],1.4);
 function lamp(x,z,h=1.65){placeModel('lamp',x,0,z,h,'height');ball(.055,warm,x,h*.87,z);glow(x,h*.87,z,'#ffd598',.8,.35);groundGlow(x,z,'#f8cc88',4.8,.3);}
 for(let x=-21;x<1;x+=4.3){lamp(x,1.5);lamp(x,-1.5);}for(let z=-14;z<16;z+=4.8){if(Math.abs(z)>2){lamp(-12.25,z);lamp(-9.7,z);}}
-function tree(x,z,s=1,type=0){const names=['oak','ornamental','cherry','maple'];return placeModel(names[type%4],x,-.04,z,3.2*s,'height',scene,false,rand()*Math.PI*2);}
+function tree(x,z,s=1,type=0){const names=['pineHD','birchHD','mapleHD','pineHD'];return placeModel(names[type%4],x,-.04,z,3.2*s,'height',scene,false,rand()*Math.PI*2);}
 // 少量成组树木，给项目与运输线留出清楚的空地。
-for(let i=0;i<130;i++){const x=(rand()-.5)*90,z=(rand()-.5)*65;if((x>-25&&x<25&&z>-18&&z<19)||(z>18&&Math.abs(x)<20))continue;tree(x,z,.65+rand()*.8,rand()<.12?2:rand()<.18?3:0);}
+for(let i=0;i<100;i++){const x=(rand()-.5)*90,z=(rand()-.5)*65;if((x>-25&&x<25&&z>-18&&z<19)||(z>18&&Math.abs(x)<20))continue;tree(x,z,.65+rand()*.8,rand()<.12?2:rand()<.18?3:0);}
 [[-24,-15],[-23,14],[-3,-14],[8,-13],[22,-2],[10,15],[0,-10],[-24,-3],[-23,4]].forEach(([x,z],i)=>tree(x,z,.65+rand()*.22,i%3));
-function bush(x,z,w=1){return placeModel('shrub',x,0,z,w,'width',scene,false,rand()*6);}
+function bush(x,z,w=1){return placeModel('shrubHD',x,0,z,w,'width',scene,false,rand()*6);}
 for(let i=0;i<35;i++){const x=(rand()-.5)*48,z=(rand()-.5)*33;if(Math.abs(x+11)<2||Math.abs(z)<2)continue;if((x>0&&x<11&&z>7)||x<-22)bush(x,z,.6+rand()*.5);}
 placeModel('bench',7.7,.02,12.8,1.7,'width',scene,false,-.6);placeModel('bench',9.4,.02,10.4,1.7,'width',scene,false,-1.3);
 placeModel('flowers',7.4,0,14.3,1.7);placeModel('flowers',10.7,0,10,1.4);placeModel('birdbath',2,.05,13.6,.75,'height');
@@ -87,7 +87,18 @@ const projects=[
 {name:'灵感花园',sub:'设计参考与视觉探索',task:'归档新的设计灵感',x:-19,z:15,agent:1,type:4},
 {name:'实验室',sub:'新想法从这里开始',task:'搭建交互原型',x:-5,z:15,agent:0,type:5}
 ];
-const pickables=[],labels=[];
+const workDefinitions=[
+ [['梳理相册交互','整理照片浏览、筛选和时间线的交互要求。'],['构建相册时间线','实现按日期浏览照片，并连接相册视图。'],['验证照片加载','检查图片加载、日期切换和空状态。']],
+ [['梳理凭据权限','整理凭据的使用范围和授权规则。'],['实现凭据检索','实现凭据搜索和筛选入口。'],['验证授权流程','检查授权提示与凭据访问流程。']],
+ [['设计按键映射','整理遥控器按键和操作的对应关系。'],['完善按钮映射','实现按键配置和操作切换。'],['检查遥控器交互','验证单击、长按和配置保存。']],
+ [['梳理库存流程','整理库存变动与同步规则。'],['实现库存同步','完成库存同步逻辑和异常处理。'],['核对同步结果','检查数据一致性及重复执行。']],
+ [['筛选设计参考','整理新参考，标记可以使用的视觉方向。'],['生成灵感页面','把筛选后的内容排成可浏览的页面。'],['检查素材出处','核对素材来源和页面可读性。']],
+ [['定义原型范围','明确本轮需要验证的交互和场景。'],['搭建交互原型','把选定的交互制作成可运行原型。'],['验证操作路径','检查关键按钮、导航和任务状态。']]
+];
+const areaNames=['设计室','开发室','验证室'],bayOffsets=[-1.7,0,1.7];
+projects.forEach((p,i)=>{p.nextArea=1;p.workspaces=workDefinitions[i].map((d,j)=>({name:areaNames[j],title:d[0],description:d[1],agent:j===0?1:0,latest:null,anchor:point(p.x+1.83,.55,p.z+bayOffsets[j])}));});
+const pickables=[],workspacePickables=[],labels=[];
+
 function label(text,x,y,z,kind='',action){const el=document.createElement('button');el.className='world-label '+kind;el.innerHTML=text;$('#labels').append(el);if(action)el.addEventListener('click',action);labels.push({el,p:point(x,y,z)});return el;}
 function villa(p,index){const group=new T.Group();group.position.set(p.x,0,p.z);scene.add(group);const w=2.65,d=2.6,levels=p.type===3?3:2,h=levels*1.05;
 box(6.7,.22,5.8,stone,0,0,0,group);box(6.5,.05,5.6,soil,0,.13,0,group);box(3.7,.06,4.8,pathMat,-.95,.16,0,group);box(2.35,.08,4.8,grass,1.95,.16,0,group);
@@ -98,7 +109,7 @@ placeModel('hedge',-.2,.2,-2.5,5.8,'width',group).scale.y*=.42;
 const houses=['family','split','cottage','townhouse','ranch','family'];
 placeModel(houses[index],-.8,.24,-.45,3.35,'width',group);
 placeModel('planter',-.8,.2,1.8,1.25,'width',group);
-placeModel('shrub',-2.7,.2,.9,.62,'width',group);
+placeModel('shrubHD',-2.7,.2,.9,.62,'width',group);
 placeModel('flowers',-2.55,.2,-1.4,.85,'width',group);
 // 主楼旁的三个独立工作区：规划、执行、交付。
 for(let i=0;i<3;i++)box(1.2,.08*(3-i),.25,pale,-.65,.17+.04*(3-i),1.02+i*.25,group);
@@ -114,7 +125,9 @@ bayZ.forEach((z,j)=>{
  // 每个工作区都有独立的出口和状态灯。
  box(.45,.075,.55,trim,3.04,.52,z,group);
  box(.46,.015,.4,black,3.04,.565,z,group);
- ball(.055,j===2?softWarm:cool,2.75,.54,z+.58,group);
+ const indicatorMaterial=softWarm.clone();const indicator=ball(.075,indicatorMaterial,2.75,.54,z+.58,group,true);p.workspaces[j].indicator=indicator;
+ const areaProxy=box(2.1,1.65,1.5,new T.MeshBasicMaterial({visible:false}),p.x+1.83,1,p.z+z,scene,true);areaProxy.visible=false;areaProxy.castShadow=false;areaProxy.userData={project:index,area:j};workspacePickables.push(areaProxy);
+ const card=document.createElement('button');card.className='room-card';card.hidden=true;card.innerHTML='<span class=room-top><span>0'+(j+1)+' · '+areaNames[j]+'</span><span class=room-agent>'+(['Codex','Claude'][p.workspaces[j].agent])+'</span></span><strong>'+p.workspaces[j].title+'</strong><span class=room-state>待派送</span>';card.onclick=()=>selectWorkArea(index,j);$('#workspaces').append(card);p.workspaces[j].card=card;
  if(j===0){
   placeModel('shed',1.83,.33,z,1.32,'width',group);
  }else if(j===1){
@@ -137,11 +150,15 @@ projects.forEach(villa);
 // 圆形中台：石阶、环形工作舱、玻璃穹顶与悬浮核心。
 const hub=point(3.6,0,.1);
 for(let i=0;i<3;i++)cyl(3.7-i*.2,3.8-i*.2,.18,stone,hub.x,.12+i*.16,hub.z);
-placeModel('pavilion',hub.x,.48,hub.z,5.3);torus(3.3,.035,cool,hub.x,.55,hub.z);
-const hubCore=new T.Group();hubCore.position.set(hub.x,4.2,hub.z);scene.add(hubCore);const core=mesh(new T.IcosahedronGeometry(.42,1),cool,0,0,0,hubCore,true);const coreRing=torus(.82,.025,cool,0,0,0,hubCore,true);coreRing.rotation.z=.5;const coreRing2=torus(.9,.018,trim,0,0,0,hubCore,true);coreRing2.rotation.z=-.6;glow(hub.x,4.2,hub.z,'#9ad8d2',3,.3);groundGlow(hub.x,hub.z,'#79d8cd',8,.14);
+cyl(2.9,3.1,1.15,dark,hub.x,1,hub.z);torus(3,.09,trim,hub.x,1.6,hub.z);torus(3.08,.045,cool,hub.x,.65,hub.z);torus(3.15,.06,pale,hub.x,.5,hub.z);
+for(let i=0;i<24;i++){const a=i/24*Math.PI*2,x=hub.x+Math.cos(a)*2.97,z=hub.z+Math.sin(a)*2.97;let o=box(.16,.65,.36,i%3===0?warm:trim,x,1.1,z);o.rotation.y=-a;}
+const dome=mesh(new T.SphereGeometry(2.8,48,24,0,Math.PI*2,0,Math.PI/2),glass,hub.x,1.65,hub.z);dome.scale.y=.45;
+for(let i=0;i<12;i++){const a=i/12*Math.PI*2;const pts=[];for(let j=0;j<=20;j++){const t=j/20*Math.PI/2;pts.push(point(hub.x+Math.cos(a)*Math.cos(t)*2.85,1.65+Math.sin(t)*1.3,hub.z+Math.sin(a)*Math.cos(t)*2.85));}mesh(new T.TubeGeometry(new T.CatmullRomCurve3(pts),24,.035,6,false),trim);}
+cyl(1.2,1.4,.28,black,hub.x,1.6,hub.z);torus(1.18,.035,cool,hub.x,1.77,hub.z);
+const hubCore=new T.Group();hubCore.position.set(hub.x,2.35,hub.z);scene.add(hubCore);const core=mesh(new T.IcosahedronGeometry(.42,1),cool,0,0,0,hubCore,true);const coreRing=torus(.82,.025,cool,0,0,0,hubCore,true);coreRing.rotation.z=.5;const coreRing2=torus(.9,.018,trim,0,0,0,hubCore,true);coreRing2.rotation.z=-.6;glow(hub.x,2.2,hub.z,'#9ad8d2',3,.3);groundGlow(hub.x,hub.z,'#79d8cd',8,.14);
 const hubLight=new T.PointLight('#9bddd0',18,8,2);hubLight.position.set(hub.x,3,hub.z);scene.add(hubLight);
 for(let i=0;i<6;i++){const a=i/6*Math.PI*2;lamp(hub.x+Math.cos(a)*4,hub.z+Math.sin(a)*4,1.2);}
-label('调度中台',hub.x,5.6,hub.z,'hub',()=>toast('中台接收任务，再分配给对应的 Agent。'));
+label('调度中台',hub.x,4.2,hub.z,'hub',()=>toast('中台接收任务，再分配给对应的 Agent。'));
 
 const agents=[];
 function makeAgent(name,x,z,color,m,index){const root=new T.Group();root.position.set(x,0,z);scene.add(root);
@@ -188,49 +205,78 @@ const px=p.x+3.5,joinZ=p.z+3.6;
 pipeline([[px,beltY,p.z-1.8],[px,beltY,p.z+1.7]]);
 const branch=pipeline([[px,beltY,p.z+1.7],[px,beltY,p.z+3],[px-.45,beltY,joinZ],[trunkX,beltY,joinZ]]);
 const trunkPart=new T.LineCurve3(point(trunkX,beltY,joinZ),point(trunkX,beltY,feedZ));
-const route=new T.CurvePath();route.add(branch);route.add(trunkPart);route.add(feed);p.route=route;
+const route=new T.CurvePath();route.add(branch);route.add(trunkPart);route.add(feed);p.route=route;p.workspaces.forEach((area,j)=>{const r=new T.CurvePath();r.add(new T.LineCurve3(point(p.x+2.95,beltY,p.z+bayOffsets[j]),point(px,beltY,p.z+bayOffsets[j])));if(j<2)r.add(new T.LineCurve3(point(px,beltY,p.z+bayOffsets[j]),point(px,beltY,p.z+1.7)));route.curves.forEach(c=>r.add(c));area.route=r;});
 box(1.1,.1,1.1,trim,trunkX,beltY-.06,joinZ);box(.95,.025,.95,black,trunkX,beltY,joinZ);
 });
 agents.forEach((a,i)=>{a.route=pipeline([[hub.x+2.7,.85,i===0?1.3:-1.3],[8,.7,i===0?2.8:-2.8],[a.x-4,.7,a.z],[a.x-2.1,1.3,a.z]]);});
 // 草地上的零星微光。
 const fireCount=75,firePositions=new Float32Array(fireCount*3);for(let i=0;i<fireCount;i++){firePositions[i*3]=(rand()-.5)*48;firePositions[i*3+1]=.3+rand()*3;firePositions[i*3+2]=(rand()-.5)*32;}const fireGeo=new T.BufferGeometry();fireGeo.setAttribute('position',new T.BufferAttribute(firePositions,3));const fireflies=new T.Points(fireGeo,new T.PointsMaterial({color:'#dbdaa5',size:.055,transparent:true,opacity:.55,depthWrite:false,blending:T.AdditiveBlending}));scene.add(fireflies);
 
+const selectionFrame=new T.LineLoop(new T.BufferGeometry().setFromPoints([point(-1,0,-.76),point(1,0,-.76),point(1,0,.76),point(-1,0,.76)]),new T.LineBasicMaterial({color:'#d69a45',depthTest:false}));selectionFrame.renderOrder=20;selectionFrame.visible=false;scene.add(selectionFrame);
+
 // 合并静态建筑，减少渲染调用；动画对象独立保留。
 scene.updateMatrixWorld(true);const batches=new Map(),remove=[];
 scene.traverse(o=>{if(o.isMesh && o.userData.static && !Array.isArray(o.material)){const key=o.material.uuid+'-'+o.castShadow+'-'+o.receiveShadow+'-'+Object.keys(o.geometry.attributes).sort().join(',');if(!batches.has(key))batches.set(key,{m:o.material,cast:o.castShadow,receive:o.receiveShadow,geos:[]});let geo=o.geometry.clone().applyMatrix4(o.matrixWorld);if(geo.index)geo=geo.toNonIndexed();for(const k of Object.keys(geo.attributes))if(!['position','normal','uv','color'].includes(k))geo.deleteAttribute(k);batches.get(key).geos.push(geo);remove.push(o);}});
 for(const b of batches.values()){const geo=mergeGeometries(b.geos,false);if(geo){const o=new T.Mesh(geo,b.m);o.castShadow=b.cast;o.receiveShadow=b.receive;scene.add(o);}b.geos.forEach(g=>g.dispose());}remove.forEach(o=>o.removeFromParent());
 
-let running=!matchMedia('(prefers-reduced-motion: reduce)').matches,sim=0,completed=0,selected=-1,lastDispatch=0,autoIndex=0,focusedTask=null;
-const tasks=[];const taskMessages=['包裹正前往中台','中台正在分配任务','Agent 正在处理任务','结果正在返回项目'];
-const cardboard=mat('cardboard','#c69a62',.95,0),packingTape=mat('packingTape','#dfc693',.75,0),paperLabel=mat('paperLabel','#eeead6',.8,0);
-function createParcel(color){const g=placeModel('box',0,0,0,.58,'width',scene,true);const tag=new T.MeshBasicMaterial({color});const label=box(.22,.12,.014,tag,0,.38,.52,g,true);label.userData.ownedMaterial=true;return g;}
-
-function dispatch(i,manual=false){if(tasks.length>=9){toast('当前演示任务较多，请等待部分任务完成。');return;}const p=projects[i],a=agents[p.agent];const task={project:i,start:sim,stage:0,package:createParcel(p.agent===0?'#c0b9ff':'#ffd29e'),id:sim+rand(),done:false};tasks.push(task);if(manual||!focusedTask||focusedTask.done)focusedTask=task;if(manual){toast(p.name+'的任务已发出');updateDetail();}if(focusedTask===task)updateActivity(task);}
+let running=!matchMedia('(prefers-reduced-motion: reduce)').matches,sim=0,completed=0,selected=-1,selectedArea=1,lastDispatch=0,autoIndex=0,focusedTask=null,inspectedTask=null,cameraTween=null,taskSequence=0;
+const tasks=[];
+const phaseNames=['前往中台','中台分配中','送往 Agent','Agent 执行中','结果返回中台','送回工作区','已交付'];
+function areaState(area){const t=area.latest;return t?phaseNames[t.stage]:'待派送';}
+function createParcel(color){const g=placeModel('box',0,0,0,.7,'width',scene,true);const tag=new T.MeshBasicMaterial({color});const label=box(.22,.12,.014,tag,0,.38,.52,g,true);label.userData.ownedMaterial=true;return g;}
+function dispatch(i,manual=false,areaIndex=null){
+ const p=projects[i];let j=areaIndex??p.nextArea;const existing=tasks.find(t=>t.project===i&&t.area===j&&!t.done);
+ if(existing){if(manual){selectParcel(existing);toast('这项任务正在进行。');}return existing;}
+ if(tasks.filter(t=>!t.done).length>=9){if(manual)toast('当前任务较多，请等一项任务完成。');return null;}
+ const area=p.workspaces[j];p.nextArea=(j+1)%3;
+ const task={project:i,area:j,agent:area.agent,title:area.title,description:area.description,route:area.route,start:sim,stage:0,package:createParcel(area.agent===0?'#b6a0f3':'#eabb77'),id:++taskSequence,done:false};
+ const hit=document.createElement('button');hit.className='parcel-hit';hit.setAttribute('aria-label','查看包裹：'+p.name+' · '+task.title+' · '+agents[task.agent].name);hit.title='查看任务';hit.innerHTML='<span></span>';hit.onclick=e=>{e.stopPropagation();selectParcel(task);};$('#parcels').append(hit);task.hit=hit;
+ area.latest=task;tasks.push(task);if(manual||!focusedTask||focusedTask.done)focusedTask=task;
+ if(manual){toast(area.name+'的任务已发出');selectParcel(task);}if(focusedTask===task)updateActivity(task);return task;
+}
 function phaseFor(age){if(age<5.5)return 0;if(age<7)return 1;if(age<11.5)return 2;if(age<19.5)return 3;if(age<24)return 4;if(age<29.5)return 5;return 6;}
 function positionOn(obj,c,t,reverse=false){obj.visible=true;const u=T.MathUtils.clamp(reverse?1-t:t,0,1),p=c.getPointAt(u);obj.position.copy(p);const dir=c.getTangentAt(u);obj.position.addScaledVector(point(-dir.z,0,dir.x).normalize(),reverse?-.235:.235);obj.position.y+=.03;obj.rotation.y=Math.atan2(dir.x,dir.z)+(reverse?Math.PI:0);}
-function updateTasks(){for(const t of tasks){const age=sim-t.start,p=projects[t.project],a=agents[p.agent],phase=phaseFor(age);t.stage=phase;t.package.visible=false;
-if(phase===0)positionOn(t.package,p.route,age/5.5);
-if(phase===1){t.package.visible=true;t.package.position.set(hub.x+Math.cos(age*3)*.9,2.1,hub.z+Math.sin(age*3)*.9);t.package.position.y=4.2;}
-if(phase===2)positionOn(t.package,a.route,(age-7)/4.5);
-if(phase===4)positionOn(t.package,a.route,(age-19.5)/4.5,true);
-if(phase===5)positionOn(t.package,p.route,(age-24)/5.5,true);
-if(phase===6&&!t.done){t.done=true;completed++;$('#completed').textContent=completed+' 项已交付';t.package.removeFromParent();t.package.traverse(o=>{if(o.isSprite){o.material.dispose();}else if(o.isMesh&&o.userData.ownedMaterial){o.material.dispose();}});}
+const parcelScreen=new T.Vector3();
+function updateTasks(){
+ for(const t of tasks){const age=sim-t.start,a=agents[t.agent],phase=phaseFor(age);t.stage=phase;t.package.visible=false;
+  if(phase===0)positionOn(t.package,t.route,age/5.5);
+  if(phase===1){t.package.visible=true;t.package.position.set(hub.x+Math.cos(age*3)*.9,2.1,hub.z+Math.sin(age*3)*.9);}
+  if(phase===2)positionOn(t.package,a.route,(age-7)/4.5);
+  if(phase===4)positionOn(t.package,a.route,(age-19.5)/4.5,true);
+  if(phase===5)positionOn(t.package,t.route,(age-24)/5.5,true);
+  t.hit.hidden=!t.package.visible;
+  if(t.package.visible){parcelScreen.copy(t.package.position).add(point(0,.25,0)).project(camera);const x=(parcelScreen.x*.5+.5)*innerWidth,y=(-parcelScreen.y*.5+.5)*innerHeight;t.hit.style.left=x+'px';t.hit.style.top=y+'px';t.hit.hidden=parcelScreen.z>1||x<0||x>innerWidth||y<80||y>innerHeight-40;t.hit.classList.toggle('inspected',inspectedTask===t);}
+  if(phase===6&&!t.done){t.done=true;completed++;$('#completed').textContent=completed+' 项已交付';t.package.removeFromParent();t.hit.remove();t.package.traverse(o=>{if(o.isMesh&&o.userData.ownedMaterial)o.material.dispose();});}
+ }
+ for(let i=tasks.length-1;i>=0;i--)if(tasks[i].done&&tasks[i]!==focusedTask&&tasks[i]!==inspectedTask)tasks.splice(i,1);
+ for(let i=0;i<2;i++){const busy=tasks.filter(t=>t.agent===i&&t.stage===3).length,count=tasks.filter(t=>t.agent===i&&!t.done).length,id=i===0?'codex':'claude';$('#'+id+'-status').textContent=busy?(i===0?'正在构建':'正在规划'):(count?'等待包裹':'准备就绪');$('#'+id+'-signal').textContent=count;agents[i].columnMat.uniforms.uPower.value=busy?1.5:.6;}
+ projects.forEach((p,i)=>{const n=tasks.filter(t=>t.project===i&&!t.done).length;p.label.querySelector('.count').textContent=n;p.label.querySelector('i').style.background=n?'#e6bf82':'#8caa8c';p.workspaces.forEach(area=>{const t=area.latest,color=!t?'#90a68a':t.done?'#79ae8c':t.stage===3?'#a496d6':'#e3b168';area.indicator.material.color.set(color);area.indicator.material.emissive.set(color);area.indicator.material.emissiveIntensity=t&&!t.done?.65:.15;const status=areaState(area);if(area.card.querySelector('.room-state').textContent!==status)area.card.querySelector('.room-state').textContent=status;});});
+ if(focusedTask)updateActivity(focusedTask);if(selected>=0)updateDetail();if(inspectedTask)updateParcelDetail();
 }
-for(let i=tasks.length-1;i>=0;i--)if(tasks[i].done&&tasks[i]!==focusedTask)tasks.splice(i,1);
-for(let i=0;i<2;i++){const busy=tasks.filter(t=>projects[t.project].agent===i&&t.stage===3).length;const count=tasks.filter(t=>projects[t.project].agent===i&&!t.done).length;const id=i===0?'codex':'claude';$('#'+id+'-status').textContent=busy?(i===0?'正在构建':'正在规划'):(count?'等待包裹':'准备就绪');$('#'+id+'-signal').textContent=count;agents[i].columnMat.uniforms.uPower.value=busy?1.5:.6;}
-projects.forEach((p,i)=>{const n=tasks.filter(t=>t.project===i&&!t.done).length;p.label.querySelector('.count').textContent=n;p.label.querySelector('i').style.background=n?'#e6bf82':'#8caa8c';});if(focusedTask)updateActivity(focusedTask);if(selected>=0)updateDetail();}
-function updateActivity(t){const p=projects[t.project],a=agents[p.agent],stage=t.stage===0?0:t.stage<=2?1:t.stage===3?2:3;$('#activity-task').textContent=p.task;$('#activity-project').textContent=p.name;$('#flow-agent').textContent=a.name;$('#activity-status').textContent=t.done?'结果已送达，项目已更新':t.stage===2?'任务正前往 '+a.name:taskMessages[stage];document.querySelectorAll('[data-step]').forEach((el,i)=>{el.classList.toggle('active',i===stage);el.classList.toggle('done',i<stage);});}
-function selectProject(i){selected=i;$('#detail').hidden=false;$('.intro').style.visibility='hidden';$('#project-title').textContent=projects[i].name;$('#project-desc').textContent=projects[i].sub;$('#project-agent').textContent=agents[projects[i].agent].name;$('#project-task').textContent=projects[i].task;const t=tasks.find(t=>t.project===i&&!t.done);if(t)focusedTask=t;updateDetail();}
-function updateDetail(){if(selected<0)return;const active=tasks.filter(t=>t.project===selected&&!t.done);$('#project-state').textContent=active.length?active.some(t=>t.stage===3)?'正在执行':'正在流转':'准备就绪';}
-$('#close-detail').onclick=()=>{selected=-1;$('#detail').hidden=true;$('.intro').style.visibility='visible';};$('#dispatch').onclick=()=>{if(!running){setRunning(true);}dispatch(selected,true);};
-let cameraTween=null;
-function focusAgent(i){const a=agents[i];cameraTween={start:performance.now(),from:controls.target.clone(),to:point(a.x-2,0,a.z),zoomFrom:camera.zoom,zoomTo:1.45};toast(a.name+' 工作站 · 点击项目可派送任务');}
+function updateActivity(t){const p=projects[t.project],a=agents[t.agent],stage=t.stage===0?0:t.stage<=2?1:t.stage===3?2:3;$('#activity-task').textContent=t.title;$('#activity-project').textContent=p.name;$('#flow-agent').textContent=a.name;$('#activity-status').textContent=phaseNames[t.stage];document.querySelectorAll('[data-step]').forEach((el,i)=>{el.classList.toggle('active',i===stage);el.classList.toggle('done',i<stage);});}
+function moveCamera(target,zoom,resetAngle=false){
+ const offset=resetAngle?defaultPosition.clone().sub(defaultTarget):camera.position.clone().sub(controls.target);
+ cameraTween={start:performance.now(),duration:matchMedia('(prefers-reduced-motion: reduce)').matches?0:1150,from:controls.target.clone(),to:target.clone(),positionFrom:camera.position.clone(),positionTo:target.clone().add(offset),zoomFrom:camera.zoom,zoomTo:zoom};
+}
+controls.addEventListener('start',()=>{cameraTween=null;});
+function selectProject(i){projects.forEach(p=>p.workspaces.forEach(a=>a.card.hidden=true));selected=i;selectedArea=1;closeParcel();document.body.classList.add('project-focus');$('#detail').hidden=false;$('.intro').style.visibility='hidden';$('#project-title').textContent=projects[i].name;$('#project-desc').textContent=projects[i].sub;moveCamera(point(projects[i].x+.45,.3,projects[i].z+.2),Math.min(3.5,Math.max(2.25,innerWidth/440)),true);updateDetail();}
+function selectWorkArea(i,j){if(selected!==i)selectProject(i);selectedArea=j;const area=projects[i].workspaces[j];if(area.latest)focusedTask=area.latest;updateDetail();}
+function updateDetail(){if(selected<0)return;const p=projects[selected],area=p.workspaces[selectedArea];$('#project-agent').textContent=agents[area.agent].name;$('#project-state').textContent=areaState(area);$('#workarea-name').textContent=area.name;$('#project-task').textContent=area.title;$('#task-description').textContent=area.description;$('#dispatch').innerHTML=area.latest&&!area.latest.done?'查看正在进行的任务 <span>↗</span>':'派送这项任务 <span>↗</span>';p.workspaces.forEach((a,j)=>a.card.classList.toggle('selected',j===selectedArea));selectionFrame.visible=true;selectionFrame.position.copy(area.anchor);selectionFrame.position.y=.43;}
+function closeProject(){selected=-1;$('#detail').hidden=true;$('.intro').style.visibility='visible';document.body.classList.remove('project-focus');selectionFrame.visible=false;projects.forEach(p=>p.workspaces.forEach(a=>a.card.hidden=true));$('#room-connectors').innerHTML='';}
+function overview(){closeProject();closeParcel();moveCamera(defaultTarget,1,true);}
+$('#close-detail').onclick=overview;$('#overview').onclick=overview;
+$('#dispatch').onclick=()=>{if(selected<0)return;const area=projects[selected].workspaces[selectedArea];if(area.latest&&!area.latest.done){selectParcel(area.latest);return;}if(!running)setRunning(true);dispatch(selected,true,selectedArea);};
+function selectParcel(task){inspectedTask=task;focusedTask=task;$('#parcel-detail').hidden=false;$('.agents').style.visibility='hidden';$('#parcel-title').textContent=task.title;$('#parcel-description').textContent=task.description;$('#parcel-id').textContent='包裹 '+String(task.id).padStart(3,'0');$('#parcel-project').textContent=projects[task.project].name+' · '+projects[task.project].workspaces[task.area].name;$('#parcel-agent').textContent=agents[task.agent].name;updateParcelDetail();}
+function updateParcelDetail(){const t=inspectedTask;if(!t)return;$('#parcel-state').textContent=phaseNames[t.stage];$('#parcel-destination').textContent=t.stage<2?'调度中台':t.stage<4?agents[t.agent].name:t.stage===4?'调度中台':projects[t.project].name+' · '+projects[t.project].workspaces[t.area].name;$('#parcel-progress').style.width=Math.min(100,((sim-t.start)/29.5)*100)+'%';document.querySelectorAll('#parcel-stages li').forEach((el,i)=>{const phase=t.stage===0?0:t.stage<3?1:t.stage===3?2:3;el.classList.toggle('active',i===phase&&!t.done);el.classList.toggle('done',i<phase||t.done);});$('#parcel-note').textContent=t.done?'已送回工作区，查看窗口会保留这次交付。':t.stage===3?'Agent 正在处理任务，完成后包裹会带回结果。':'状态会随这个包裹实时更新。';}
+function closeParcel(){inspectedTask=null;$('#parcel-detail').hidden=true;$('.agents').style.visibility='visible';}
+$('#close-parcel').onclick=closeParcel;$('#parcel-locate').onclick=()=>{if(!inspectedTask)return;const t=inspectedTask;selectProject(t.project);selectWorkArea(t.project,t.area);};
+function focusAgent(i){closeProject();const a=agents[i];moveCamera(point(a.x-2,0,a.z),1.45);toast(a.name+' 工作站');}
 document.querySelectorAll('[data-agent]').forEach(el=>el.onclick=()=>focusAgent(Number(el.dataset.agent)));
-$('#overview').onclick=()=>{controls.target.copy(defaultTarget);camera.position.copy(defaultPosition);camera.zoom=1;camera.updateProjectionMatrix();cameraTween=null;controls.update();};
+addEventListener('keydown',e=>{if(e.key==='Escape'){if(inspectedTask)closeParcel();else if(selected>=0)overview();}});
 function setRunning(v){running=v;$('#pause').ariaLabel=v?'暂停动画':'播放动画';$('#pause').innerHTML=v?'<svg viewBox="0 0 20 20"><path d="M7 5v10M13 5v10"/></svg>':'<svg viewBox="0 0 20 20"><path d="m7 4 9 6-9 6Z"/></svg>';}
 $('#pause').onclick=()=>setRunning(!running);setRunning(running);
 let showLabels=true;$('#labels-toggle').onclick=()=>{showLabels=!showLabels;$('#labels').style.display=showLabels?'block':'none';$('#labels-toggle').classList.toggle('selected',showLabels);$('#labels-toggle').ariaLabel=showLabels?'隐藏建筑标签':'显示建筑标签';};
-$('#zoom-in').onclick=()=>{camera.zoom=Math.min(2.5,camera.zoom*1.15);camera.updateProjectionMatrix();};$('#zoom-out').onclick=()=>{camera.zoom=Math.max(.72,camera.zoom/1.15);camera.updateProjectionMatrix();};
+$('#zoom-in').onclick=()=>{cameraTween=null;camera.zoom=Math.min(4.5,camera.zoom*1.15);camera.updateProjectionMatrix();};$('#zoom-out').onclick=()=>{cameraTween=null;camera.zoom=Math.max(.72,camera.zoom/1.15);camera.updateProjectionMatrix();};
 let daylight=true;
 function lighting(day){
  daylight=day;document.body.dataset.theme=day?'day':'night';$('#night').classList.toggle('selected',!day);$('#dawn').classList.toggle('selected',day);$('#night').setAttribute('aria-pressed',String(!day));$('#dawn').setAttribute('aria-pressed',String(day));
@@ -243,17 +289,30 @@ function lighting(day){
 }
 $('#night').onclick=()=>lighting(false);$('#dawn').onclick=()=>lighting(true);lighting(true);
 let toastTimeout;function toast(message){$('#toast').textContent=message;$('#toast').classList.add('show');clearTimeout(toastTimeout);toastTimeout=setTimeout(()=>$('#toast').classList.remove('show'),3200);}
-const raycaster=new T.Raycaster();let down=null;canvas.addEventListener('pointerdown',e=>{down={x:e.clientX,y:e.clientY};});canvas.addEventListener('pointerup',e=>{if(!down||Math.hypot(e.clientX-down.x,e.clientY-down.y)>5)return;const xy=new T.Vector2(e.clientX/innerWidth*2-1,-e.clientY/innerHeight*2+1);raycaster.setFromCamera(xy,camera);const hits=raycaster.intersectObjects(pickables);if(hits.length)selectProject(hits[0].object.userData.project);down=null;});canvas.addEventListener('pointermove',e=>{raycaster.setFromCamera(new T.Vector2(e.clientX/innerWidth*2-1,-e.clientY/innerHeight*2+1),camera);canvas.style.cursor=raycaster.intersectObjects(pickables).length?'pointer':'grab';});
+const raycaster=new T.Raycaster();let down=null;
+function hitTest(e){const r=canvas.getBoundingClientRect();raycaster.setFromCamera(new T.Vector2((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1),camera);if(selected>=0){const rooms=raycaster.intersectObjects(workspacePickables.filter(o=>o.userData.project===selected));if(rooms.length)return {...rooms[0].object.userData,kind:'room'};}const hits=raycaster.intersectObjects(pickables);return hits.length?{...hits[0].object.userData,kind:'project'}:null;}
+canvas.addEventListener('pointerdown',e=>{down={x:e.clientX,y:e.clientY};});canvas.addEventListener('pointerup',e=>{const tap=down&&Math.hypot(e.clientX-down.x,e.clientY-down.y)<5;down=null;if(!tap)return;const hit=hitTest(e);if(hit?.kind==='room')selectWorkArea(hit.project,hit.area);else if(hit)selectProject(hit.project);});canvas.addEventListener('pointermove',e=>{canvas.style.cursor=hitTest(e)?'pointer':'grab';});
 function resize(){const aspect=innerWidth/innerHeight,extent=aspect>1?21:30;camera.left=-extent*aspect;camera.right=extent*aspect;camera.top=extent;camera.bottom=-extent;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);composer.setSize(innerWidth,innerHeight);}
 addEventListener('resize',resize);resize();
-const screenVector=new T.Vector3();function projectLabels(){for(const {el,p} of labels){screenVector.copy(p).project(camera);const x=(screenVector.x*.5+.5)*innerWidth,y=(-screenVector.y*.5+.5)*innerHeight;el.style.left=x+'px';el.style.top=y+'px';el.style.visibility=screenVector.z>1||x<0||x>innerWidth||y<75||y>innerHeight-50?'hidden':'visible';}}
+const screenVector=new T.Vector3();
+function projectLabels(){
+ for(const {el,p} of labels){screenVector.copy(p).project(camera);const x=(screenVector.x*.5+.5)*innerWidth,y=(-screenVector.y*.5+.5)*innerHeight;el.style.left=x+'px';el.style.top=y+'px';el.style.visibility=screenVector.z>1||x<0||x>innerWidth||y<75||y>innerHeight-50?'hidden':'visible';}
+ if(selected<0)return;
+ if(inspectedTask){projects[selected].workspaces.forEach(a=>a.card.hidden=true);$('#room-connectors').innerHTML='';return;}
+ const p=projects[selected],spots=p.workspaces.map(a=>{const v=a.anchor.clone().project(camera);return {x:(v.x*.5+.5)*innerWidth,y:(-v.y*.5+.5)*innerHeight};});
+ const order=[0,1,2].sort((a,b)=>spots[a].y-spots[b].y),cardWidth=innerWidth<700?166:190,gap=78;
+ const x=Math.min(innerWidth-cardWidth-24,Math.max(...spots.map(v=>v.x))+125);let firstY=Math.max(110,Math.min(innerHeight-300,spots[order[0]].y-35));let lines='';
+ order.forEach((j,k)=>{const area=p.workspaces[j],pos=spots[j],y=Math.max(firstY+k*gap,pos.y-32);area.card.hidden=false;area.card.style.left=x+'px';area.card.style.top=Math.min(innerHeight-150,y)+'px';lines+='<path d="M '+pos.x+' '+pos.y+' L '+(x-18)+' '+(Math.min(innerHeight-150,y)+32)+' L '+x+' '+(Math.min(innerHeight-150,y)+32)+'"/>';});
+ $('#room-connectors').innerHTML=lines;
+}
 let last=performance.now(),lastUi=-1,frame=0;dispatch(0);tasks[0].start=-1.8;dispatch(1);tasks[1].start=-12;dispatch(2);tasks[2].start=-21;focusedTask=tasks[0];
 function animate(now){requestAnimationFrame(animate);const dt=Math.min((now-last)/1000,.05);last=now;if(document.hidden)return;if(running)sim+=dt;controls.update();
-if(cameraTween){const t=Math.min((now-cameraTween.start)/1100,1),k=1-Math.pow(1-t,3),delta=cameraTween.to.clone().sub(controls.target);const next=cameraTween.from.clone().lerp(cameraTween.to,k);camera.position.add(next.clone().sub(controls.target));controls.target.copy(next);camera.zoom=T.MathUtils.lerp(cameraTween.zoomFrom,cameraTween.zoomTo,k);camera.updateProjectionMatrix();if(t===1)cameraTween=null;}
+if(cameraTween){const t=cameraTween.duration===0?1:Math.min((now-cameraTween.start)/cameraTween.duration,1),k=t*t*(3-2*t);controls.target.copy(cameraTween.from).lerp(cameraTween.to,k);camera.position.copy(cameraTween.positionFrom).lerp(cameraTween.positionTo,k);camera.zoom=T.MathUtils.lerp(cameraTween.zoomFrom,cameraTween.zoomTo,k);camera.updateProjectionMatrix();camera.lookAt(controls.target);if(t===1)cameraTween=null;}
+
 beltTexture.offset.x=-sim*.32;beltBackTexture.offset.x=sim*.32;hubCore.rotation.y=sim*.45;core.rotation.z=sim*.2;coreRing2.rotation.y=sim*.4;
 agents.forEach((a,i)=>{a.rings.rotation.y=sim*(i===0?.22:-.18);a.rings.rotation.z=Math.sin(sim*.3)*.12;a.orb.position.y=4.25+Math.sin(sim*.8+i)*.09;a.columnMat.uniforms.uTime.value=sim;});ripples.forEach((a,i)=>{const k=((sim*.18+i*.33)%1);a.scale.setScalar(.4+k*1.8);a.material.opacity=(1-k)*.12;});fireflies.rotation.y=Math.sin(sim*.025)*.02;
 if(sim-lastDispatch>6.8){lastDispatch=sim;autoIndex=(autoIndex+1)%projects.length;dispatch(autoIndex);}
 updateTasks();projectLabels();composer.render();frame++;if(frame===2){$('#loading').classList.add('done');window.__townReady=true;}
 if(sim-lastUi>1){lastUi=sim;const minutes=(daylight?24:42)+Math.floor(sim/30);$('#simtime').textContent=((daylight?10:20)+Math.floor(minutes/60)).toString().padStart(2,'0')+':'+(minutes%60).toString().padStart(2,'0');}
 }
-window.__town={getStats:()=>({modelsLoaded:modelLoaded,daylight,tasks:tasks.map(t=>({project:projects[t.project].name,stage:t.stage,done:t.done})),completed,sim,running,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles}),dispatch,selectProject};requestAnimationFrame(animate);
+window.__town={getStats:()=>({modelsLoaded:modelLoaded,daylight,selectedProject:selected,selectedArea,cameraZoom:camera.zoom,inspectedTaskId:inspectedTask?.id??null,tasks:tasks.map(t=>({id:t.id,project:projects[t.project].name,area:t.area,agent:agents[t.agent].name,title:t.title,stage:t.stage,done:t.done})),completed,sim,running,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles}),dispatch,selectProject,selectWorkArea,selectParcel,overview};requestAnimationFrame(animate);
