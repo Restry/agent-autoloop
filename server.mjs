@@ -15,14 +15,15 @@ export const server=createServer(async(req,res)=>{
   const url=new URL(req.url,'http://'+req.headers.host);
   if(url.pathname.startsWith('/api/')){
    const path=url.pathname.slice(4);
-   const allowed=req.method==='GET'? /^\/(healthz|v1\/state|v1\/stream|v1\/runs\/\d+\/why)$/.test(path):req.method==='POST'&&/^\/v1\/(runs\/\d+\/cancel|cards\/\d+\/(answer|resolve)|rules\/[^/]+\/(pause|resume|replay|run))$/.test(path);
-   if(!allowed)return fail(404,'没有这个接口');
+   const allowed=req.method==='GET'? /^\/(healthz|v1\/state|v1\/stream|v1\/rules-file|v1\/runs\/\d+\/why)$/.test(path):req.method==='POST'&&/^\/v1\/(runs\/\d+\/cancel|cards\/\d+\/(answer|resolve)|rules\/[^/]+\/(pause|resume|replay|run))$/.test(path);
+   const rulesWrite=(req.method==='POST'&&path==='/v1/rules-file/check')||(req.method==='PUT'&&path==='/v1/rules-file');
+   if(!allowed&&!rulesWrite)return fail(404,'没有这个接口');
    if(req.headers['sec-fetch-site']==='cross-site')return fail(403,'不允许跨站请求');
    if(req.headers.origin&&!['http://127.0.0.1:'+port,'http://localhost:'+port].includes(req.headers.origin))return fail(403,'不允许的来源');
    let body;
-   if(req.method==='POST'){
+   if(req.method==='POST'||req.method==='PUT'){
     if(!req.headers['content-type']?.startsWith('application/json'))return fail(415,'需要 JSON');
-    const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>65536)return fail(413,'内容过长');chunks.push(chunk);}body=Buffer.concat(chunks);JSON.parse(body.toString()||'{}');
+    const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>1048576)return fail(413,'内容过长');chunks.push(chunk);}body=Buffer.concat(chunks);JSON.parse(body.toString()||'{}');
    }
    const {owner}=JSON.parse(await readFile(config,'utf8'));
    const controller=new AbortController();res.on('close',()=>controller.abort());
