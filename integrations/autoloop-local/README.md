@@ -1,6 +1,12 @@
 # 官方源码与本地扩展的边界
 
-## 来源链
+## 当前 fork 接入（2026-11-16）
+
+用户确认使用自己的 fork：https://github.com/Restry/agent-autoloop 。已通过 GitHub API 核实 fork=true、parent 为 KKKKhazix/agent-autoloop，当前账号 Restry 有管理和写权限。
+
+源码目录 origin 已改为 git@github.com:Restry/agent-autoloop.git，upstream 保留官方仓库；codex/agent-town 基于 fork 的 8e96e1c 加本地扩展。安装目录 origin 同样改为用户 fork，原本的本地 origin 改名为 local-source；已部署代码保存到 deploy/agent-town-20261116，运行程序未切换版本。以下来源链是接入前记录。
+
+## 接入前来源链
 
 官方仓库：https://github.com/KKKKhazix/agent-autoloop
 
