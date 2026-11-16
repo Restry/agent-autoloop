@@ -1,0 +1,7 @@
+import {readdir,readFile,realpath,stat} from 'node:fs/promises';
+import {resolve,sep} from 'node:path';
+const titles={morning:'科技与 AI 早报',projects:'项目进展日报'};
+export function createReports(home){
+ async function file(kind,name){if(!Object.hasOwn(titles,kind)||!/^\d{4}-\d{2}-\d{2}(?:-aihot|-tech-ai)?\.md$/.test(name))throw Object.assign(Error('报告不存在'),{status:404});const root=await realpath(resolve(home,'work/daily-'+kind+'/briefs'));const path=await realpath(resolve(root,name));if(!path.startsWith(root+sep))throw Object.assign(Error('不允许的路径'),{status:403});return path;}
+ return {async list(){const reports=[];for(const kind of Object.keys(titles)){let names;try{names=await readdir(resolve(home,'work/daily-'+kind+'/briefs'));}catch(e){if(e.code==='ENOENT')continue;throw e;}for(const name of names){if(!/^\d{4}-\d{2}-\d{2}(?:-aihot|-tech-ai)?\.md$/.test(name))continue;try{const meta=await stat(await file(kind,name));if(meta.isFile())reports.push({kind,name,title:titles[kind],date:name.slice(0,10),edition:kind==='projects'?'项目进展':name.includes('-aihot')?'AIHOT':name.includes('-tech-ai')?'RSS 新闻':'旧版',updatedAt:meta.mtime.toISOString(),bytes:meta.size});}catch(e){if(e.status===403||e.code==='ENOENT')continue;throw e;}}}return {reports:reports.sort((a,b)=>b.date.localeCompare(a.date)||b.updatedAt.localeCompare(a.updatedAt))};},async read(kind,name){const path=await file(kind,name);if((await stat(path)).size>2*1024*1024)throw Object.assign(Error('报告过大'),{status:413});return {kind,name,title:titles[kind],content:await readFile(path,'utf8')};}};
+}
