@@ -72,3 +72,9 @@ node checks/conveyor-routes.mjs
 `server.mjs` 是静态服务和接口代理；`dist/layout.js` 从真实 group 生成工作区布局；`dist/hub.js` 管理中台数据及控件；`dist/app.js` 管理三维场景和状态映射。接入前页面代码在 `backups/`。
 
 Three.js 0.170.0 随项目保存，无 CDN。建筑、植物、庭院、纸箱使用 Polyfork GLB；来源和许可见 `dist/models/credits.html` 与 `manifest.json`。四种植物使用公开的 HD 预览 GLB，适用 Polyfork 商业许可，不按 CC BY 再授权。Claude 工作站保留用户提供的 GLB；其他品牌图标来源和许可见 `dist/icons/NOTICE.md`。
+
+## 声音设置
+
+右下角喇叭打开设置面板。自然庭院、机械工坊、电子控制室、柔和提示四种主题均为本机 Web Audio 合成。任务开始、任务结束、背景声音、操作与消息提示分别有开关和音量，总开关可关闭所有声音。切换主题保留类别开关；设置保存在当前浏览器 localStorage。隐藏页面会静音，试听不会触发中台任务。机械与电子主题的背景使用振荡器，不使用持续白噪音。
+
+浏览器离线音频检查见 checks/audio-render.html：覆盖四种主题的开始、结束、背景，共 12 组有声/静音渲染，并检查音量峰值、主题切换和持久化。
