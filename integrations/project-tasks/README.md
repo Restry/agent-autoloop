@@ -2,8 +2,8 @@
 
 ## 当前配置
 
-- 每日早报：北京时间每天 08:00 采集科技和 AI 新闻，随后由 Codex 生成报告。
-- 每日项目简报：每天 08:10 采集登记项目的 Git 状态与中台任务，随后生成报告。非 Git 的项目父目录会检查一级子仓库；仍无法读取的目录明确记为未知。
+- 科技与 AI 早报：北京时间每天 08:00 采集科技和 AI 新闻，随后由 Codex 生成报告。
+- 项目进展日报：每天 08:10 采集登记项目的 Git 状态与中台任务，随后生成报告。非 Git 的项目父目录会检查一级子仓库；仍无法读取的目录明确记为未知。
 - 网站巡检与异常排查归入同一个“AI Hub 网站巡检”院落，保留两条原规则及原执行工具。
 - 报告保存在 ~/.agent-autoloop/work/daily-morning/briefs/ 和 daily-projects/briefs/。早报优先最近24小时新闻，不足时补充72小时内资料并标明发布时间；每条附来源链接。
 - 规则时区由中台返回值确认是 Asia/Shanghai。报告默认留在本机，轮次结果提供路径。
@@ -31,3 +31,11 @@
 新闻来源：OpenAI、Google AI、The Verge、TechCrunch 的公开 RSS/Atom。只采集标题与摘要，不声称已阅读全文；来源失败会记录，全部失败时不生成报告。采集脚本为 collect-news.py，部署到后台运行目录。
 
 科技新闻早报使用 YYYY-MM-DD-tech-ai.md，资料文件和派发事件同样带新闻类型编号。旧待办版 YYYY-MM-DD.md 保留，不能阻止新闻版生成。
+
+## AIHOT 接入
+
+已读取本机 ~/.claude/skills/aihot/SKILL.md（2.0.0）及服务说明。定时采集使用 AIHOT JSON /api/v1/items 接口的24小时精选，匿名 GET，不发送本机任务或凭据。新闻文字只作为资料，报告注明 AIHOT、原始来源及北京时间，标题链接到 AIHOT 阅读页。失败时如实记录，不回退到 RSS 冒充 AIHOT。
+
+科技与 AI 早报使用 YYYY-MM-DD-aihot.md，与旧 RSS 版、待办版分开。项目进展日报保持原路径，旧报告保留。规则修改前备份为 ~/.agent-autoloop/rules.before-aihot.json。时间为08:00和08:10 Asia/Shanghai。
+
+检查：node checks/aihot.test.mjs，覆盖 GET、重试、空结果、失败、链接校验及报告文件名。已通过真实中台采集和报告生成。
