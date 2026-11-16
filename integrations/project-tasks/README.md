@@ -2,10 +2,10 @@
 
 ## 当前配置
 
-- 每日早报：北京时间每天 08:00 采集本地笔记与中台待办，随后由 Codex 生成报告。
+- 每日早报：北京时间每天 08:00 采集科技和 AI 新闻，随后由 Codex 生成报告。
 - 每日项目简报：每天 08:10 采集登记项目的 Git 状态与中台任务，随后生成报告。非 Git 的项目父目录会检查一级子仓库；仍无法读取的目录明确记为未知。
 - 网站巡检与异常排查归入同一个“AI Hub 网站巡检”院落，保留两条原规则及原执行工具。
-- 报告保存在 ~/.agent-autoloop/work/daily-morning/briefs/ 和 daily-projects/briefs/。可选本地笔记放在 ~/.agent-autoloop/notes/；没有笔记时会如实说明。
+- 报告保存在 ~/.agent-autoloop/work/daily-morning/briefs/ 和 daily-projects/briefs/。早报优先最近24小时新闻，不足时补充72小时内资料并标明发布时间；每条附来源链接。
 - 规则时区由中台返回值确认是 Asia/Shanghai。报告默认留在本机，轮次结果提供路径。
 
 ## GitHub
@@ -27,3 +27,5 @@
 本机已实际跑通两份报告的“采集 → 派给 Codex → 写报告”。GitHub 配置已用真实公开仓库验证读取、目录和规则检查；保存使用隔离测试中台验证，尚未替用户启用任何真实仓库的 Issue 跟进。
 
 同一本机工作目录不能同时绑定到两个已启用的院落，避免并发修改同一份代码。首次修改前的中台规则保存在 ~/.agent-autoloop/rules.before-project-tasks.json。
+
+新闻来源：OpenAI、Google AI、The Verge、TechCrunch 的公开 RSS/Atom。只采集标题与摘要，不声称已阅读全文；来源失败会记录，全部失败时不生成报告。采集脚本为 collect-news.py，部署到后台运行目录。
