@@ -1,6 +1,6 @@
 // What the kernel's doors need from this machine: the clock, a timer for the next deadline, long polls to wake, the
 // rules file to watch, the log as a stream and the webhook plugins.
-import { realpathSync, watch } from "node:fs";
+import { realpathSync, unwatchFile, watch, watchFile } from "node:fs";
 import { basename, dirname } from "node:path";
 import { RULES_FILE } from "./home.ts";
 import { loadPlugin } from "./plugins.ts";
@@ -109,6 +109,12 @@ export function makeHandler(commit = "dev") {
   const watcher = watch(realpathSync.native(dirname(RULES_FILE)), (_event, file) => {
     if (file === basename(RULES_FILE)) fire();
   });
+  // Native directory notifications can miss atomic replacement on this host. Stat polling follows the path,
+  // including removal/recreation; failed ticks still use the same retry path as native notifications.
+  const pollRules = () => {
+    if (!closed) fire();
+  };
+  watchFile(RULES_FILE, { interval: 1_000, persistent: false }, pollRules);
   const handle = createHandler({
     commit,
     now: Date.now,
@@ -145,6 +151,7 @@ export function makeHandler(commit = "dev") {
       closed = true;
       clearTimeout(timer);
       watcher.close();
+      unwatchFile(RULES_FILE, pollRules);
       unlisten();
       wake();
     },

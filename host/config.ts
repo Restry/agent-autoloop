@@ -8,7 +8,7 @@ import { privateDirectory } from "./files.ts";
 export type ChannelConfig = { use?: string; key: string; [option: string]: unknown };
 export type Config = {
   url: string;
-  hub?: { listen: string; publicUrl?: string; ui?: { origins?: string[]; remoteRules?: boolean } };
+  hub?: { listen: string; publicUrl?: string; ui?: { origins?: string[]; rulesFile?: boolean; remoteRules?: boolean } };
   worker?: { name: string; key: string; capacity?: number; unreachable?: string[] };
   channels?: Record<string, ChannelConfig>;
   source?: { name: string; key: string };

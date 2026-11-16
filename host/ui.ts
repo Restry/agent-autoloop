@@ -18,11 +18,13 @@ type Handle = (request: Request) => Promise<Response>;
 
 function settings() {
   try {
-    const ui = (readConfig().hub as { ui?: { origins?: unknown; remoteRules?: unknown } } | undefined)?.ui;
+    const ui = (
+      readConfig().hub as { ui?: { origins?: unknown; rulesFile?: unknown; remoteRules?: unknown } } | undefined
+    )?.ui;
     const origins = Array.isArray(ui?.origins) ? ui.origins.filter((origin) => typeof origin === "string") : [];
-    return { origins: origins as string[], remoteRules: ui?.remoteRules === true };
+    return { origins: origins as string[], rulesFile: ui?.rulesFile === true, remoteRules: ui?.remoteRules === true };
   } catch {
-    return { origins: [] as string[], remoteRules: false };
+    return { origins: [] as string[], rulesFile: false, remoteRules: false };
   }
 }
 
@@ -94,14 +96,16 @@ async function rulesFile(hub: Hub, request: Request, path: string, remoteRules: 
 
 export function withUi(handle: Handle, hub: Hub): Handle {
   return async (request) => {
-    const { origins, remoteRules } = settings();
+    const { origins, rulesFile: enabled, remoteRules } = settings();
     const cors = corsHeaders(request, origins);
     if (request.method === "OPTIONS" && request.headers.has("access-control-request-method")) {
       return new Response(null, { status: Object.keys(cors).length ? 204 : 403, headers: cors });
     }
     const path = new URL(request.url).pathname;
     const answer = path.startsWith("/v1/rules-file")
-      ? await rulesFile(hub, request, path, remoteRules)
+      ? enabled
+        ? await rulesFile(hub, request, path, remoteRules)
+        : json({ error: "规则文件 API 未启用" }, 404)
       : await handle(request);
     if (!Object.keys(cors).length) return answer;
     const headers = new Headers(answer.headers);
