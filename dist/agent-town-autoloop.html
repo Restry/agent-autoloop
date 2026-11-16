@@ -85,13 +85,14 @@ body[data-mode="snapshot"] #conn::after{content:"只读";margin-left:8px;padding
 .github-modal{width:min(620px,calc(100vw - 32px));max-height:90vh;overflow:auto;padding:26px;position:relative}.github-modal h2{margin:10px 0}.github-modal p{font-size:12px;line-height:1.8;color:var(--muted)}.github-choice{display:flex;align-items:center;gap:9px;font-size:12px;margin:13px 0}.github-choice input{width:auto}#project-github{margin:8px 0 14px}.github-modal #github-msg{min-height:20px;color:var(--accent)}
 .audio-modal{position:relative;width:min(530px,calc(100vw - 32px));max-height:90vh;overflow:auto;padding:28px}.audio-modal h2{margin:10px 0 18px}.audio-master,.audio-category>label{display:flex;gap:9px;align-items:center;font-size:13px}.audio-modal input[type=checkbox]{width:auto;accent-color:var(--accent)}.audio-modal input[type=range]{padding:0;accent-color:var(--accent)}.audio-level{display:flex;align-items:center;gap:12px;font-size:12px}.audio-level input{flex:1;min-width:0}.audio-level output{width:36px;text-align:right}.audio-category{border-top:1px solid var(--line);padding:14px 0;display:grid;grid-template-columns:1fr auto;gap:10px}.audio-category .audio-level{grid-column:1}.audio-category button{grid-column:2;grid-row:1 / 3;font-size:11px;align-self:center}.audio-modal p,.audio-modal small{font-size:11px;line-height:1.7;color:var(--muted)}#audio-preview-status{min-height:18px}
 .task-alert-summary{display:block;width:100%;margin:10px 0;padding:11px;text-align:left;color:#873d24;background:#e9a46440;border:1px solid #b6644480;border-radius:9px;font-size:12px;line-height:1.6}.task-alert-summary[hidden]{display:none}.task-warning{margin:14px 0;padding:13px;border-left:3px solid #c76c43;background:#d48b4030;border-radius:6px}.task-warning strong{color:#a34a2b}.task-warning p{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;line-height:1.7}.has-task-error{border-color:#c76c43!important;box-shadow:0 0 0 2px #c76c4328}.has-task-error:before{content:"!";color:#bd552b;font-weight:700;margin-right:5px}body[data-theme=night] .task-warning strong,body[data-theme=night] .task-alert-summary{color:#ffbd8a}
+.task-state{display:inline-block;font-size:12px;color:var(--ink);padding:5px 8px;border:1px solid var(--line);border-radius:7px}.task-state.is-blocked{color:#a34a2b;background:#d48b4028}.task-state.is-completed{color:#39714a;background:#7da77a20}.sublist button>span{display:block;font-size:11px;line-height:1.7;margin-top:5px;overflow-wrap:anywhere}body[data-theme=night] .task-state.is-blocked{color:#ffbd8a}
 </style>
 <script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/addons/"}}</script></head>
 <body data-theme="dusk">
 <main id="world" aria-label="Agent 小镇三维场景"><canvas id="scene"></canvas><div id="labels"></div></main>
 <header><div class="brand panel"><svg width="26" height="26" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m14 2 10.4 6v12L14 26 3.6 20V8L14 2Z"/><path d="m3.6 8 10.4 6 10.4-6M14 14v12"/></svg><div><strong>Agent 小镇</strong><span>Agent Autoloop 中台</span></div></div>
 <div class="clock panel" id="conn"><i class="live"></i><span id="conn-text">未连接</span></div>
-<div class="right"><button id="github-new">接入 GitHub</button><button id="rules-open" class="panel hbtn">规则文件</button><button class="panel hbtn" data-report-kind="morning">报告</button><button id="runs-open" class="panel hbtn">轮次记录</button><button id="overview" class="panel hbtn">回到全景 ↗</button><button id="leave" class="panel hbtn">退出</button></div></header>
+<div class="right"><button id="github-new">接入 GitHub</button><button id="rules-open" class="panel hbtn">规则文件</button><button class="panel hbtn" data-report-kind="morning">报告</button><button id="runs-open" class="panel hbtn">任务记录</button><button id="overview" class="panel hbtn">回到全景 ↗</button><button id="leave" class="panel hbtn">退出</button></div></header>
 <aside class="stats panel" aria-label="中台概况"><span class="eyebrow">中台概况</span><div id="totals"></div><button id="task-alerts-open" class="task-alert-summary" hidden></button><p id="spend"></p>
 <div class="cards-head"><span class="eyebrow">待你拍板</span><b id="card-count">0</b></div><div id="card-list"></div></aside>
 <aside class="agents panel"><span class="eyebrow">执行工作站</span><div id="agent-list"></div></aside>
@@ -131,6 +132,8 @@ body[data-mode="snapshot"] #conn::after{content:"只读";margin-left:8px;padding
 <div id="loading"><div class="spin"></div><strong>小镇正在准备</strong><span>正在搭建建筑与传送带</span></div>
 <script>setTimeout(function(){if(!window.__townReady){var l=document.getElementById("loading");if(l&&!l.classList.contains("done"))l.querySelector("span").textContent="加载时间较长。本页面需要联网加载 Three.js，并需要浏览器开启图形加速。";}},12000);</script>
 <script type="module">
+import {groupTasks,runProgress,evidenceFromFacts,isContinuation} from "./task-progress.js";
+const taskEvidence=new Map(),evidenceStamp=new Map(),evidenceFailures=new Map();let evidenceLoading=false;
 import {openArtifacts} from "./artifacts.js";
 import {openReports} from "./reports.js";
 const reportKind=name=>/早报|新闻/.test(name)?"morning":/日报|项目简报/.test(name)?"projects":null;
@@ -657,7 +660,8 @@ document.addEventListener('visibilitychange',()=>audio.setVisible(!document.hidd
 // ================= 轮次（包裹）：由中台的真实状态驱动 =================
 let running=!reduced,sim=0,selected=-1,selectedArea=0,focusedTask=null,inspectedTask=null,cameraTween=null,night=false,lightMix=1,lightTarget=1,firstState=true,rebuilding=false;
 const tasks=[],seenRuns=new Set(),seenCards=new Set(),parcelPicks=[];
-const stateText=r=>r.state==='queued'?(r.attempts>0?'没跑成，等重试（已失败 '+r.attempts+' 次）':'排队中'):r.state==='claimed'?(r.stopping?'正在停止':taskAlert(r)?.historical?'重试处理中 · 上次有错误':'Agent 正在处理'):r.state==='unknown'?'不确定是否还在跑':r.state==='done'?'做成了':r.state==='nothing'?'看过了，没事可做':r.state==='cancelled'?'结束了，没做成':String(r.state);
+const stateText=r=>runProgress(r,taskEvidence,[...(S.cards||[]),...(S.recentCards||[])]).label;
+const successFor=r=>taskGroups().find(g=>g.runs.some(q=>q.id===r.id))?.progress.complete===true;
 const topoSig=s=>JSON.stringify([s.lines.map(l=>[l.name,l.group,l.agent]),s.agents.map(a=>[a.id,a.name,a.use,a.worker]),s.sources.map(x=>[x.id,x.name]),s.channels.map(x=>[x.id,x.name]),(s.elsewhere||[]).map(x=>x.name)]);
 const builtSig=topoSig(S);
 function makeParcel(ad,task){const g=new T.Group();g.rotation.order='YXZ';scene.add(g);const body=new T.Group();g.add(body);dyn(G.box,M.kraft,body,0,.19,0).scale.set(.42,.36,.42);dyn(G.box,ad.mat,body,0,.19,0).scale.set(.44,.37,.11);dyn(G.box,ad.mat,body,0,.19,0).scale.set(.11,.37,.44);
@@ -665,6 +669,7 @@ function makeParcel(ad,task){const g=new T.Group();g.rotation.order='YXZ';scene.
 const TP=[8,9.5,14.5,22.5,27.5,35.5]; // 各段动画结束时间（秒）
 const phaseFor=age=>{for(let i=0;i<6;i++)if(age<TP[i])return i;return 6;};
 function addTask(run,initial){
+ if(run.state==='queued'&&isContinuation(run))return;
  const where=areaOfRule[run.rule],ai=agentIx[run.agent];if(!where||ai===undefined)return;
  if(FIN(run.state)&&(initial||!run.claimedAt||!run.finishedAt||Date.parse(S.now)-Date.parse(run.finishedAt)>90000))return;
  const p=projects[where.project],area=p.workspaces[where.area];
@@ -683,7 +688,7 @@ function ride(obj,c,t,rev=false,lane=.235){
 }
 function stageFx(t,phase,a){return audio.withChannel(phase>=4?'end':'start',()=>stageFxBody(t,phase,a));}
 function stageFxBody(t,phase,a){
- const p=t.parcel.position,pan=p.x/32,st=t.run.state;
+ const p=t.parcel.position,pan=p.x/32,st=t.run.state==='done'&&!successFor(t.run)?'blocked':t.run.state;
  if(phase===1){tone(1318.5,.5,.06,'sine',0,0,hub.x/32);tone(1975.5,.6,.035,'sine',.03,0,hub.x/32);hubPulse=1;hubWaveT=0;sparkle(hub.x,2.75,hub.z,16,HUBC,1.5,.16,.9);puff(hub.x-2.9,1.1,hub.z+.2,5,WHITE,.7,.5,.7,1,.4);}
  else if(phase===2){tone(660,.26,.05,'triangle',0,1320,hub.x/32);hubPulse=.7;a.beamT=1;sparkle(hub.x,2.75,hub.z,8,a.col,1.2,.14,.8);}
  else if(phase===3){hiss(.28,.07,900,.7,0,a.x/32);tone(110,.2,.11,'sine',.14,70,a.x/32);sparkle(p.x,p.y+.3,p.z,12,a.col,1.2,.14,.8);puff(p.x,p.y,p.z,4,a.pale,.5,.5,.7,1.1,.4);}
@@ -730,14 +735,14 @@ function applyState(s){
  if(topoSig(s)!==builtSig){if(!rebuilding){rebuilding=true;toast('规则或 Agent 的配置变了，小镇正在按新配置重建…');setTimeout(()=>location.reload(),1500);}return;}
  const byId=new Map(s.runs.map(r=>[r.id,r]));
  for(const t of tasks){if(t.done)continue;const r=byId.get(t.id);if(r)t.run=r;else if(!initial)endTask(t);}
- [...s.runs].reverse().forEach(r=>{if(!seenRuns.has(r.id)){seenRuns.add(r.id);addTask(r,initial);}});
+ [...s.runs].reverse().forEach(r=>{if(!seenRuns.has(r.id)||(!FIN(r.state)&&!tasks.some(t=>!t.done&&t.id===r.id))){seenRuns.add(r.id);addTask(r,initial);}});
  const lineOf=new Map(s.lines.map(l=>[l.name,l]));projects.forEach(p=>{p.lines=p.lines.map(l=>lineOf.get(l.name)||l);p.workspaces.forEach(a=>a.line=lineOf.get(a.name)||a.line);});
  const grouped=new Map(groupStationAgents(s.agents).map(a=>[a.id,a]));agents.forEach(a=>{a.data=grouped.get(a.id)||a.data;a.memberIds=a.data.memberIds;});
  sources.forEach(o=>{const d=s.sources.find(q=>q.id===o.data.id);if(d){if(!initial&&d.events>o.events)o.flash=1;o.events=d.events;o.data=d;}});
  channels.forEach(o=>{const d=s.channels.find(q=>q.id===o.data.id);if(d)o.data=d;});
  let fresh=0;for(const c of s.cards)if(!seenCards.has(c.id)){seenCards.add(c.id);if(!initial)fresh++;}
  if(fresh){channels.forEach(o=>{if(o.data.online){o.flash=1;sparkle(o.x,2.5,o.z,10,GOLD,1.2,.14,.9);}});hubPulse=1;hubWaveT=0;if(running){tone(880,.25,.07,'sine',0,0,.1);tone(1318.5,.4,.06,'sine',.14,0,.1);}toast(fresh>1?'有 '+fresh+' 张新卡片':'有一张新卡片：'+s.cards[0].title);}
- renderHud();
+ renderHud();hydrateEvidence();
 }
 let refreshing=false,refreshAgain=false,lastRefresh=0,streamTimer=0;
 function setLink(ok,why){conn.ok=ok;conn.link=conn.mode==='demo'?'演示数据':conn.mode==='snapshot'?'快照 · 只读':ok?(conn.stream?'已连接 · 实时':'已连接 · 轮询'):'连接中断'+(why?'：'+why:'');const el=$('#conn-text');if(el){el.textContent=conn.link;$('#conn').classList.toggle('bad',conn.mode==='live'&&!ok);}}
@@ -767,16 +772,37 @@ const num=v=>Number(v)||0;
 agents.forEach((a,i)=>{const b=document.createElement('button');b.innerHTML='<i class="glyph" style="background:'+(a.iconBg||a.color)+'">'+a.icon+'</i><div><strong>'+esc(a.name)+'</strong><span class="sub"><span class="maker">'+esc(a.worker)+' · </span><span class="status"></span></span></div><span class="signal">0</span>';$('#agent-list').append(b);a.rowEl=b;a.statusEl=b.querySelector('.status');a.signalEl=b.querySelector('.signal');b.onclick=()=>focusAgent(i);});
 if(!agents.length)$('#agent-list').innerHTML='<p class="none">规则文件里还没有 Agent。</p>';
 let infoView=null,selectedRule=0,history=null;
+function viewRuns(){return [...new Map([...(history?.runs||[]),...S.runs].map(r=>[r.id,r])).values()];}
+function taskGroups(){return groupTasks(viewRuns(),taskEvidence,[...(S.cards||[]),...(S.recentCards||[])]);}
+async function hydrateEvidence(){
+ if(conn.mode!=='live'||evidenceLoading)return;
+ const candidates=viewRuns().filter(r=>isContinuation(r)||(r.state==='done'&&(/同步|阻塞|待你|授权|确认/.test(r.rule+' '+r.summary)||(S.cards||[]).some(c=>c.rule===r.rule))));
+ const stamp=r=>[r.state,r.finishedAt,r.summary].join('|');
+ const pending=candidates.filter(r=>evidenceStamp.get(r.id)!==stamp(r)&&Date.now()-(evidenceFailures.get(r.id)||0)>30000);if(!pending.length)return;
+ evidenceLoading=true;
+ try{for(let i=0;i<pending.length;i+=2){await Promise.all(pending.slice(i,i+2).map(async r=>{try{const facts=await api('GET','/v1/runs/'+r.id+'/why');taskEvidence.set(r.id,evidenceFromFacts(r.id,facts));evidenceStamp.set(r.id,stamp(r));evidenceFailures.delete(r.id);}catch{evidenceFailures.set(r.id,Date.now());}}));renderHud();}}finally{evidenceLoading=false;}
+}
+function taskStateHtml(g){return '<strong class="task-state '+(g.progress.state==='blocked'?'is-blocked':g.progress.complete?'is-completed':'')+'">'+esc(g.progress.label)+'</strong>';}
+function taskButton(g){const waiting=g.runs.filter(r=>r.state==='queued'&&isContinuation(r)).length;return '<button data-act="task" data-id="'+esc(g.id)+'"><strong>'+esc(g.rule)+'</strong><em>'+taskStateHtml(g)+' · '+fmtT(g.root.createdAt)+'</em><span>任务 #'+esc(g.id)+' · '+g.runs.length+' 条执行记录'+(g.continuations?' · '+g.continuations+' 次授权续办':'')+(waiting?'（'+waiting+' 次待续办）':'')+'</span></button>';}
+function showTask(id){const g=taskGroups().find(g=>g.id===id);if(!g)return showRuns();
+ const prior=g.runs.find(r=>runProgress(r,taskEvidence,[...(S.cards||[]),...(S.recentCards||[])]).state==='blocked');
+ let h=taskStateHtml(g)+row('任务起点','#'+esc(g.id)+' · '+fmtT(g.root.createdAt))+row('执行记录',g.runs.length+' 轮 · '+g.continuations+' 次授权续办');
+ if(g.missingRoot)h+='<p>任务起始轮次尚未加载，可在任务记录中加载更早记录。</p>';
+ if(prior)h+='<div class="task-warning"><strong>'+(g.progress.state==='blocked'?'当前阻塞':'此前阻塞 · 续办进展见下方')+'</strong><p>'+esc(prior.summary||prior.error||'需要处理确认事项')+'</p></div>';
+ if(g.progress.complete)h+='<p>Agent 已明确回报完成。'+esc(g.latest.summary)+'</p>';else if(!g.active.length&&g.progress.state==='unconfirmed')h+='<p>执行已结束，但还没有明确的任务完成回报。</p>';
+ h+='<div class="sublist"><span class="eyebrow">同一任务的执行过程</span>'+g.runs.map(r=>'<button data-act="run" data-id="'+esc(r.id)+'"><strong>'+(isContinuation(r)?'授权后续办':'初始执行')+' · 第 '+esc(r.id)+' 轮</strong><em>'+esc(stateText(r))+' · '+fmtT(r.createdAt)+'</em>'+((r.events||[]).filter(e=>e.type==='card.answered').map(e=>'<span>确认事项：'+esc(e.summary)+'</span>').join(''))+(r.summary?'<span>'+esc(r.summary)+'</span>':'')+'</button>').join('')+'</div>';
+ info('任务进度',g.rule,h,()=>showTask(id));hydrateEvidence();
+}
 function renderHud(){
- const t=S.totals||{},sp=S.spending||{},alerts=taskAlerts(S.runs);const alertButton=$('#task-alerts-open');alertButton.hidden=!alerts.length;alertButton.textContent=alerts.length?'任务异常 '+alerts.length+' · '+alerts[0].rule+'：'+alerts[0].label:'';
- $('#totals').innerHTML=[['正在处理',t.running],['排队',t.queued],['等重试',t.retrying],['不确定',t.unknown],['今日完成',t.doneToday],['待你拍板',t.attention]].map(([k,v])=>'<div><b>'+esc(v??0)+'</b><span>'+k+'</span></div>').join('');
+ const t=S.totals||{},sp=S.spending||{},groups=taskGroups(),blocked=groups.filter(g=>g.progress.state==='blocked'),alerts=taskAlerts(S.runs);const alertButton=$('#task-alerts-open');alertButton.hidden=!alerts.length&&!blocked.length;alertButton.textContent=blocked.length?'阻塞任务 '+blocked.length+' · '+blocked[0].rule:alerts.length?'任务异常 '+alerts.length+' · '+alerts[0].rule+'：'+alerts[0].label:'';
+ $('#totals').innerHTML=[['执行中任务',groups.filter(g=>g.active.some(r=>r.state==='claimed')).length],['待执行任务',groups.filter(g=>g.progress.state==='queued').length],['阻塞任务',blocked.length],['不确定',t.unknown],['近期完成任务',groups.filter(g=>g.progress.complete).length],['待你拍板',t.attention]].map(([k,v])=>'<div><b>'+esc(v??0)+'</b><span>'+k+'</span></div>').join('');
  const spend=(name,d)=>d?name+' '+num(d.rounds)+' 轮 · '+fmtN(d.tokens)+' Token · 费用 '+(+d.cost||0).toFixed(2)+(d.missingTokens||d.missingCost?'（部分轮次没有上报用量）':''):'';
  $('#spend').textContent=[spend('今天',sp.today),spend('近 7 天',sp.week)].filter(Boolean).join('　');
  $('#card-count').textContent=S.cards.length;
  $('#card-list').innerHTML=S.cards.length?S.cards.map(c=>'<button data-act="card" data-id="'+esc(c.id)+'"><i class="k '+(c.kind==='ask'?'ask':'notice')+'"></i><strong>'+esc(c.title)+'</strong><span>'+esc(c.rule||'中台')+' · '+(c.kind==='ask'?'等你决定':'通知')+'</span></button>').join(''):'<p class="none">没有等你处理的卡片。</p>';
- agents.forEach(a=>{const run=activeRuns(r=>a.memberIds.includes(r.agent)&&r.state!=='queued').length,all=activeRuns(r=>a.memberIds.includes(r.agent)).length;const ready=S.localAgentReadiness?.[a.key];a.statusEl.textContent=!a.data.online?'电脑离线':run?'处理中 '+run+' 轮':ready?.ready===false?'待登录':ready?.ready===true||a.key==='script'?'可接任务':'电脑在线';a.signalEl.textContent=all;a.rowEl.classList.toggle('busy',a.data.online&&run>0);a.rowEl.classList.toggle('offline',!a.data.online);a.label.el.classList.toggle('offline',!a.data.online);});
+ agents.forEach(a=>{const assigned=groups.filter(g=>g.active.some(r=>a.memberIds.includes(r.agent))),run=assigned.filter(g=>g.active.some(r=>a.memberIds.includes(r.agent)&&r.state==='claimed')).length,all=assigned.length;const ready=S.localAgentReadiness?.[a.key];a.statusEl.textContent=!a.data.online?'电脑离线':run?'处理中 '+run+' 个任务':ready?.ready===false?'待登录':ready?.ready===true||a.key==='script'?'可接任务':'电脑在线';a.signalEl.textContent=all;a.rowEl.classList.toggle('busy',a.data.online&&run>0);a.rowEl.classList.toggle('offline',!a.data.online);a.label.el.classList.toggle('offline',!a.data.online);});
  workerLabels.forEach(w=>{const on=S.agents.some(a=>a.worker===w.name&&a.online);w.el.classList.toggle('offline',!on);w.el.querySelector('small').textContent=on?'在线':'离线';});
- projects.forEach(p=>{const names=new Set(p.lines.map(l=>l.name)),n=activeRuns(r=>names.has(r.rule)).length;p.label.el.querySelector('.count').textContent=n;p.label.el.classList.toggle('active',n>0);const warnings=taskAlerts(S.runs.filter(r=>names.has(r.rule)));p.label.el.classList.toggle('has-task-error',warnings.length>0);p.label.el.title=warnings.length?warnings[0].label+'：'+warnings[0].error:'';
+ projects.forEach(p=>{const names=new Set(p.lines.map(l=>l.name)),n=groups.filter(g=>g.active.length&&g.runs.some(r=>names.has(r.rule))).length;p.label.el.querySelector('.count').textContent=n;p.label.el.classList.toggle('active',n>0);const warnings=[...groups.filter(g=>names.has(g.rule)&&g.progress.state==='blocked').map(g=>({label:g.progress.label,error:g.latest.summary})),...taskAlerts(S.runs.filter(r=>names.has(r.rule)))];p.label.el.classList.toggle('has-task-error',warnings.length>0);p.label.el.title=warnings.length?warnings[0].label+'：'+warnings[0].error:'';
   let skipped=0;p.lines.forEach(l=>{skipped+=(l.paused&&l.paused.skipped&&l.paused.skipped.count)||0;});p.pile.forEach((m,k)=>m.visible=k<Math.min(3,skipped));
   p.workspaces.forEach(a=>{const l=a.line,run=activeRuns(r=>r.rule===l.name&&r.state!=='queued').length,q=activeRuns(r=>r.rule===l.name).length,color=l.paused?'#8a8478':run?agentColor(l.agent):q?PAL.gold:'#90a68a';a.indicatorMat.color.set(color);a.indicatorMat.emissive.set(color);a.indicatorMat.emissiveIntensity=l.paused?.05:q?1.1:.25;a.chip.el.querySelector('.t').textContent=(l.paused?'⏸ ':'')+l.name;});});
  sources.forEach(o=>o.label.el.querySelector('.count').textContent=o.events);
@@ -787,10 +813,10 @@ function renderHud(){
  if(infoView&&!(document.activeElement&&$('#info-body').contains(document.activeElement)&&/INPUT|TEXTAREA/.test(document.activeElement.tagName)))infoView();
  updateActivity();
 }
-function updateActivity(){const t=focusedTask;$('#activity-mode').textContent=conn.link;$('#completed').textContent='今日完成 '+((S.totals||{}).doneToday??0)+' 轮';
+function updateActivity(){const t=focusedTask;$('#activity-mode').textContent=conn.link;$('#completed').textContent='今日已结束 '+((S.totals||{}).doneToday??0)+' 轮';
  if(!t){$('#activity-task').textContent=S.lines.length?'现在没有进行中的轮次':'还没有规则';$('#activity-project').textContent='';$('#activity-status').textContent='';return;}
- const stage=!t.go?0:t.stage<=2?1:t.stage===3?2:3;$('#activity-task').textContent='第 '+t.id+' 轮 · '+t.run.rule;$('#activity-project').textContent=projects[t.project].name;$('#flow-agent').textContent=agents[t.agent].name;$('#activity-status').textContent=stateText(t.run);
- document.querySelectorAll('[data-step]').forEach((el,i)=>{el.classList.toggle('active',i===stage&&!t.done);el.classList.toggle('done',i<stage||t.done);});}
+ const stage=!t.go?0:t.stage<=2?1:t.stage===3?2:3;const task=taskGroups().find(g=>g.runs.some(r=>r.id===t.id));$('#activity-task').textContent='任务 #'+(task?.id||t.id)+' · '+t.run.rule;$('#activity-project').textContent=projects[t.project].name;$('#flow-agent').textContent=agents[t.agent].name;$('#activity-status').textContent=stateText(t.run);
+ document.querySelectorAll('[data-step]').forEach((el,i)=>{el.classList.toggle('active',i===stage&&!t.done);el.classList.toggle('done',i<stage||(t.done&&successFor(t.run)));});}
 function moveCamera(target,zoom,resetAngle=false){const offset=resetAngle?defaultPosition.clone().sub(defaultTarget):camera.position.clone().sub(controls.target);cameraTween={start:performance.now(),duration:reduced?0:1150,from:controls.target.clone(),to:target.clone(),positionFrom:camera.position.clone(),positionTo:target.clone().add(offset),zoomFrom:camera.zoom,zoomTo:zoom};}
 controls.addEventListener('start',()=>{cameraTween=null;});
 // ---- 院落（分组）与规则
@@ -800,9 +826,9 @@ function selectArea(i,j){if(selected!==i)selectProject(i);else uiTick();selected
 function updateDetail(){if(selected<0)return;const p=projects[selected],l=p.lines[selectedRule]||p.lines[0];
  const ghProject=Object.values(S.githubProjects||{}).find(g=>g.group===p.name);$('#project-github').textContent=ghProject?'GitHub · '+ghProject.repo+(ghProject.enabled?'':'（已停用）'):'配置 GitHub 仓库';
  $('#project-desc').textContent='这个分组有 '+p.lines.length+' 条规则，它们排同一条队。'+(p.lines.length>p.workspaces.length?'院子里只画了前 '+p.workspaces.length+' 间小屋，其余规则在下面的列表里。':'');
- $('#rooms').innerHTML=p.lines.map((q,j)=>{const act=activeRuns(r=>r.rule===q.name).length;return '<button data-act="rule" data-id="'+j+'" class="'+(q===l?'selected':'')+'"><i class="r-dot" style="background:'+agentColor(q.agent)+'"></i><span class="r-name">'+esc(sourceName(q.source))+'</span><span class="r-agent">'+esc(agentName(q.agent))+'</span><strong>'+esc(q.name)+'</strong><span class="r-state">'+(taskAlerts(S.runs.filter(r=>r.rule===q.name))[0]?.label||(q.paused?'已暂停':act?act+' 轮进行中':'空闲'))+'</span></button>';}).join('');
+ $('#rooms').innerHTML=p.lines.map((q,j)=>{const task=taskGroups().find(g=>g.rule===q.name),act=taskGroups().filter(g=>g.rule===q.name&&g.active.length).length;return '<button data-act="rule" data-id="'+j+'" class="'+(q===l?'selected':'')+'"><i class="r-dot" style="background:'+agentColor(q.agent)+'"></i><span class="r-name">'+esc(sourceName(q.source))+'</span><span class="r-agent">'+esc(agentName(q.agent))+'</span><strong>'+esc(q.name)+'</strong><span class="r-state">'+(taskAlerts(S.runs.filter(r=>r.rule===q.name))[0]?.label||(q.paused?'已暂停':task?task.progress.label:act?act+' 个任务进行中':'空闲'))+'</span></button>';}).join('');
  if(!l)return;const tt=l.totals||{},pa=l.paused,later=(S.skipped||[]).filter(e=>(e.rules||[]).includes(l.name));
- let h=row('触发',l.source==='schedule'?esc(l.every||'定时')+'，下次 '+fmtT(l.next):esc(sourceName(l.source))+' · '+esc((l.types||[]).join('、')))+row('交给',esc(agentName(l.agent)))+row('进行中',num(tt.running)+' 处理 · '+num(tt.queued)+' 排队 · '+num(tt.retrying)+' 等重试')+row('累计',num(tt.done)+' 做成 · '+num(tt.nothing)+' 没事可做');
+ let h=row('触发',l.source==='schedule'?esc(l.every||'定时')+'，下次 '+fmtT(l.next):esc(sourceName(l.source))+' · '+esc((l.types||[]).join('、')))+row('交给',esc(agentName(l.agent)))+row('任务状态',esc(taskGroups().find(g=>g.rule===l.name)?.progress.label||'暂无记录'))+row('执行记录',num(tt.running)+' 轮执行 · '+num(tt.queued)+' 轮等待（含授权续办） · '+num(tt.retrying)+' 等重试')+row('累计',num(tt.done)+' 轮已结束 · '+num(tt.nothing)+' 没事可做');
  const issues=taskAlerts(S.runs.filter(r=>r.rule===l.name));if(issues.length)h+='<div class="task-warning"><strong>'+esc(issues[0].label)+'</strong><p>'+esc(errorSummary(issues[0].error))+'</p><button class="ghost" data-act="run" data-id="'+issues[0].id+'">查看出错轮次</button></div>';
  if(pa)h+=row('暂停',esc(pa.by||'')+' 于 '+fmtT(pa.since)+(pa.until?'，到 '+fmtT(pa.until):''))+(pa.reason?row('原因',esc(pa.reason)):'')+(pa.skipped?row('暂停期间跳过',esc(pa.skipped.count)+' 条事件'):'');
  if(!pa&&later.length)h+=row('最近因暂停跳过',later.length+' 条事件（已补跑过的不会重复补）');
@@ -823,6 +849,7 @@ let whyOf=0,whyHtml='';
 function showRun(id){const r=findRun(id);if(!r)return closeInfo();const t=tasks.find(q=>q.id===id&&!q.done);inspectedTask=t||null;if(t)focusedTask=t;
  if(whyOf!==id){whyOf=id;whyHtml='';}
  let h='<p>'+esc(r.summary||'这一轮还没有结论。')+'</p>'+row('规则',esc(r.rule))+row('Agent',esc(agentName(r.agent)))+row('状态','<span role="status">'+esc(stateText(r))+'</span>')+row('创建',fmtT(r.createdAt))+row('领取',fmtT(r.claimedAt))+row('结束',fmtT(r.finishedAt));
+ const group=taskGroups().find(g=>g.runs.some(q=>q.id===r.id));if(group)h+='<button class="ghost wide" data-act="task" data-id="'+esc(group.id)+'">返回同一任务的完整进度</button>';
  h+='<button class="ghost wide" data-artifacts-run="'+r.id+'">交付成果 · 预览与下载</button>';
  h+=reportButton(r.rule);
  if(r.manual)h+=row('来历','本人手动运行');if(r.error)h+='<div class="task-warning"><strong>'+esc(taskAlert(r)?.label||'历史错误记录')+'</strong><p>'+esc(errorSummary(r.error))+'</p><details><summary>技术详情</summary><p>'+esc(r.error)+'</p></details>'+(r.state==='claimed'?'<small>这是上次失败的错误；当前重试尚未结束，不能据此认定恢复成功。</small>':'')+'</div>';if(r.usage)h+=row('用量',esc(Object.entries(r.usage).map(([k,v])=>k+' '+v).join(' · ')));if(r.link)h+=row('会话',esc(r.link));
@@ -842,14 +869,16 @@ function showTimers(){uiTick();listPanel('复查闹钟','Agent 预约的复查',
 function showSource(i){uiTick();const o=sources[i],d=o.data;listPanel('来源',d.name,'来源编号 '+esc(d.id)+'，累计 '+esc(d.events)+' 条事件。下面是接这个来源的规则。',S.lines.filter(l=>l.source===d.id).map(l=>'<div>'+esc(l.name)+'<em>'+(l.source==='schedule'?esc(l.every||''):esc((l.types||[]).join('、')))+' → '+esc(agentName(l.agent))+'</em></div>'),()=>showSource(i));}
 function showChannel(i){uiTick();const d=channels[i].data,f=d.lastFailure;info('通道',d.name,row('通道程序',d.online?'在线':'离线')+row('最近联系',fmtT(d.seenAt))+(f?row('最近一次发送失败','卡片 #'+esc(f.card)+'，试了 '+esc(f.tries)+' 次'+(f.givenUp?'，已放弃':''))+row('原因',esc(f.error)):row('最近一次发送','没有失败记录'))+'<p>中台通过通道把卡片送到你面前。你也可以直接在这个页面回答卡片。</p>',()=>showChannel(i));}
 function showElsewhere(i){uiTick();const d=sheds[i].data;info('别处任务',d.name,'<p>这个任务不由中台启动，它在别处定时运行，只向中台报告。</p>'+row('在哪里',esc(d.where||'—'))+row('周期',esc(d.every||d.cron||'—'))+row('下次',fmtT(d.next))+row('Agent',esc(agentName(d.agent)))+row('来源',esc(sourceName(d.source))),()=>showElsewhere(i));}
-function showAgent(i){const a=agents[i],d=a.data,tt=d.totals||{};const runs=activeRuns(r=>a.memberIds.includes(r.agent));
- info('Agent 工作站',d.name,row('执行工具',esc(d.name))+row('配置数量',String(d.members.length))+row('接入状态',esc(S.localAgentReadiness?.[a.key]?.message||'按中台配置执行'))+row('接入方式',esc(d.use))+(d.program?row('启动程序',esc(d.program)):'')+row('所在电脑',esc(d.worker))+row('电脑状态',d.online?'在线':'离线')+row('最近联系',fmtT(d.seenAt))+row('累计',num(tt.done)+' 做成 · '+num(tt.nothing)+' 没事可做')+
-  '<div class="sublist"><span class="eyebrow">包含的执行配置</span>'+d.members.map(m=>'<div>'+esc(m.name)+'<em>'+esc(m.id)+' · '+esc(m.use)+'</em></div>').join('')+'</div><div class="sublist"><span class="eyebrow">手上的轮次</span>'+(runs.length?runs.map(r=>'<button data-act="run" data-id="'+esc(r.id)+'">第 '+esc(r.id)+' 轮 · '+esc(r.rule)+'<em>'+esc(stateText(r))+'</em></button>').join(''):'<div>现在没有。</div>')+'</div>',()=>showAgent(i));}
+function showAgent(i){const a=agents[i],d=a.data,tt=d.totals||{};const runs=taskGroups().filter(g=>g.active.some(r=>a.memberIds.includes(r.agent)));
+ info('Agent 工作站',d.name,row('执行工具',esc(d.name))+row('配置数量',String(d.members.length))+row('接入状态',esc(S.localAgentReadiness?.[a.key]?.message||'按中台配置执行'))+row('接入方式',esc(d.use))+(d.program?row('启动程序',esc(d.program)):'')+row('所在电脑',esc(d.worker))+row('电脑状态',d.online?'在线':'离线')+row('最近联系',fmtT(d.seenAt))+row('累计',num(tt.done)+' 轮已结束 · '+num(tt.nothing)+' 没事可做')+
+  '<div class="sublist"><span class="eyebrow">包含的执行配置</span>'+d.members.map(m=>'<div>'+esc(m.name)+'<em>'+esc(m.id)+' · '+esc(m.use)+'</em></div>').join('')+'</div><div class="sublist"><span class="eyebrow">手上的任务</span>'+(runs.length?runs.map(taskButton).join(''):'<div>现在没有。</div>')+'</div>',()=>showAgent(i));}
 function focusAgent(i){uiTick();closeProject();const a=agents[i];moveCamera(v3(a.x,0,a.z),baseZoom*1.9);showAgent(i);}
-function showHub(){uiTick();const t=S.totals||{};info('调度中台','中台',row('连接',esc(conn.link))+(conn.mode==='live'?row('地址',esc(conn.url)):'')+row('时区',esc(S.timezone||'—'))+row('正在处理',num(t.running))+row('排队',num(t.queued))+row('等重试',num(t.retrying))+row('不确定',num(t.unknown))+row('今日完成',num(t.doneToday))+row('待你拍板',num(t.attention))+'<p>中台按规则把事件派给 Agent，并把卡片送到通道。</p>',showHub);}
-function showRuns(){const all=[...S.runs,...(history?history.runs:[])].filter((r,k,a)=>a.findIndex(q=>q.id===r.id)===k).sort((a,b)=>b.id-a.id),more=history?history.next:(S.hasMore?S.nextBefore:null);
- info('轮次记录','最近的轮次','<div class="sublist">'+(all.length?all.map(r=>'<button data-act="run" data-id="'+esc(r.id)+'">第 '+esc(r.id)+' 轮 · '+esc(r.rule)+'<em>'+esc(stateText(r))+(r.error?' · '+esc(r.error.slice(0,160)):'')+(r.summary?' · '+esc(r.summary):'')+'</em></button>').join(''):'<div>还没有轮次。</div>')+'</div>'+(more&&conn.mode==='live'?'<button class="ghost wide" data-act="more-runs">更早的轮次</button>':''),showRuns);}
-function showTaskAlerts(){listPanel('任务异常','需要关注的执行记录','重试中的记录保留上次错误；待你拍板仅统计尚未回答的卡片。',taskAlerts(S.runs).map(a=>'<button data-act="run" data-id="'+a.id+'"><strong>'+esc(a.rule)+'</strong><em>'+esc(a.label)+'</em><span>'+esc(errorSummary(a.error))+'</span></button>'),showTaskAlerts);}
+function showHub(){uiTick();const t=S.totals||{},groups=taskGroups();info('调度中台','中台',row('连接',esc(conn.link))+(conn.mode==='live'?row('地址',esc(conn.url)):'')+row('时区',esc(S.timezone||'—'))+row('执行中任务',groups.filter(g=>g.active.some(r=>r.state==='claimed')).length)+row('待执行任务',groups.filter(g=>g.progress.state==='queued').length)+row('待续办轮次',S.runs.filter(r=>r.state==='queued'&&isContinuation(r)).length)+row('等重试',num(t.retrying))+row('不确定',num(t.unknown))+row('今日已结束轮次',num(t.doneToday))+row('待你拍板',num(t.attention))+'<p>中台按规则把事件派给 Agent，并把卡片送到通道。</p>',showHub);}
+function showRuns(){const groups=taskGroups(),more=history?history.next:(S.hasMore?S.nextBefore:null);
+ info('任务记录','任务与授权续办','<p>同一任务的授权后续办合并展示；每次定时触发仍独立记录。执行结束不等于任务完成。</p><div class="sublist">'+(groups.length?groups.map(taskButton).join(''):'<div>还没有任务。</div>')+'</div>'+(more&&conn.mode==='live'?'<button class="ghost wide" data-act="more-runs">更早的任务</button>':''),showRuns);hydrateEvidence();}
+
+function showTaskAlerts(){const blocked=taskGroups().filter(g=>g.progress.state==='blocked');listPanel('任务异常','阻塞与执行异常','阻塞任务尚未完成；授权后续办会保留在同一任务中。',[...blocked.map(taskButton),...taskAlerts(S.runs).map(a=>'<button data-act="run" data-id="'+a.id+'"><strong>'+esc(a.rule)+'</strong><em>'+esc(a.label)+'</em><span>'+esc(errorSummary(a.error))+'</span></button>')],showTaskAlerts);}
+
 $('#task-alerts-open').onclick=showTaskAlerts;
 $('#runs-open').onclick=()=>{uiTick();showRuns();};$('#leave').onclick=leave;
 // ---- 规则文件（需要中台的规则读写接口）
@@ -882,7 +911,7 @@ addEventListener('keydown',e=>{if(e.key==='Escape')$('#github-modal').hidden=tru
 // ---- 所有带 data-act 的按钮
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-act]');if(!b)return;const act=b.dataset.act,id=+b.dataset.id;uiTick();
  try{
-  if(act==='card')return showCard(id);if(act==='run')return showRun(id);if(act==='rule'){selectedRule=id;return updateDetail();}if(act==='open-rules')return openRules();
+  if(act==='task')return showTask(id);if(act==='card')return showCard(id);if(act==='run')return showRun(id);if(act==='rule'){selectedRule=id;return updateDetail();}if(act==='open-rules')return openRules();
   if(act==='locate'){const r=findRun(id),w=r&&areaOfRule[r.rule];if(w){closeInfo();selectProject(w.project);selectedRule=projects[w.project].lines.findIndex(l=>l.name===r.rule);updateDetail();}return;}
   if(act==='why'){const facts=await api('GET','/v1/runs/'+id+'/why');whyOf=id;whyHtml='<div class="sublist"><span class="eyebrow">这一轮在日志里的记录</span>'+(Array.isArray(facts)?facts:[]).map(f=>'<div>#'+esc(f.seq)+' · '+fmtT(new Date(f.at).toISOString())+' · '+esc(f.type)+'</div>').join('')+'</div>';return showRun(id);}
   if(act==='more-runs'){const before=history?history.next:S.nextBefore;const s=await api('GET','/v1/state?before='+before);history={runs:[...(history?history.runs:[]),...s.runs],next:s.hasMore?s.nextBefore:null};return showRuns();}
