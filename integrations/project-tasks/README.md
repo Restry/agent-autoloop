@@ -29,3 +29,5 @@
 同一本机工作目录不能同时绑定到两个已启用的院落，避免并发修改同一份代码。首次修改前的中台规则保存在 ~/.agent-autoloop/rules.before-project-tasks.json。
 
 新闻来源：OpenAI、Google AI、The Verge、TechCrunch 的公开 RSS/Atom。只采集标题与摘要，不声称已阅读全文；来源失败会记录，全部失败时不生成报告。采集脚本为 collect-news.py，部署到后台运行目录。
+
+科技新闻早报使用 YYYY-MM-DD-tech-ai.md，资料文件和派发事件同样带新闻类型编号。旧待办版 YYYY-MM-DD.md 保留，不能阻止新闻版生成。

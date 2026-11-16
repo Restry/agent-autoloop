@@ -6,8 +6,9 @@ import {fileURLToPath} from 'node:url';
 const exec=promisify(execFile),home=process.env.AGENT_AUTOLOOP_HOME||process.env.HOME+'/.agent-autoloop';
 export const localDate=date=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).format(date);
 async function git(cwd,args){return (await exec('git',['-C',cwd,...args],{timeout:10000,maxBuffer:1024*1024})).stdout.trim();}
+export const reportName=(kind,date)=>date+(kind==='morning'?'-tech-ai':'')+'.md';
 export async function collect(kind,{preview=false}={}){if(!['morning','projects'].includes(kind))throw Error('Unknown brief type');const now=new Date(),date=localDate(now),dir=home+'/work/daily-'+kind;await mkdir(dir+'/inputs',{recursive:true,mode:0o700});await mkdir(dir+'/briefs',{recursive:true,mode:0o700});
- try{if(preview)throw Error('preview');await access(dir+'/briefs/'+date+'.md');return {outcome:'nothing',summary:'今天的简报已经生成。',events:[]};}catch{}
+ try{if(preview)throw Error('preview');await access(dir+'/briefs/'+reportName(kind,date));return {outcome:'nothing',summary:'今天的简报已经生成。',events:[]};}catch{}
  let input={date,window:{from:new Date(now.getTime()-86400000).toISOString(),to:now.toISOString()},timezone:'Asia/Shanghai',generatedAt:now.toISOString(),mode:kind};
  if(kind==='morning'){
   const {stdout}=await exec('/usr/bin/python3',[fileURLToPath(new URL('./collect-news.py',import.meta.url))],{timeout:30000,maxBuffer:4*1024*1024});input.news=JSON.parse(stdout);
@@ -23,7 +24,7 @@ export async function collect(kind,{preview=false}={}){if(!['morning','projects'
   input.projects=[...unavailable];for(const root of roots){try{const changes=(await git(root,['status','--short'])).split('\n').filter(Boolean),commits=(await git(root,['log','--since='+input.window.from,'--until='+input.window.to,'--max-count=35','--format=%h %ad %s','--date=iso-strict'])).split('\n').filter(Boolean),total=Number(await git(root,['rev-list','--count','--since='+input.window.from,'--until='+input.window.to,'HEAD']));input.projects.push({name:basename(root),path:root,branch:await git(root,['branch','--show-current']),changes:{total:changes.length,items:changes.slice(0,80),truncated:changes.length>80},commits:{total,items:commits,truncated:total>commits.length}});}catch{input.projects.push({name:basename(root),path:root,error:'Git 状态读取失败'});}}
  }
  if(preview)return input;
- const file='inputs/'+date+'.json';await writeFile(dir+'/'+file,JSON.stringify(input,null,2)+'\n',{mode:0o600});return {outcome:'done',summary:'已采集'+(kind==='projects'?'项目进展':'科技和 AI 新闻')+'，准备生成简报。',events:[{id:kind+'-'+date,type:'brief.'+kind+'.ready',subject:date,summary:date+' '+(kind==='projects'?'每日项目简报':'每日早报'),detail:JSON.stringify({date,input:file,output:'briefs/'+date+'.md'})}]};
+ const file='inputs/'+reportName(kind,date).replace(/\.md$/,'.json');await writeFile(dir+'/'+file,JSON.stringify(input,null,2)+'\n',{mode:0o600});return {outcome:'done',summary:'已采集'+(kind==='projects'?'项目进展':'科技和 AI 新闻')+'，准备生成简报。',events:[{id:kind+'-'+date+(kind==='morning'?'-tech-ai-v1':''),type:'brief.'+kind+'.ready',subject:date,summary:date+' '+(kind==='projects'?'每日项目简报':'每日早报'),detail:JSON.stringify({date,input:file,output:'briefs/'+reportName(kind,date)})}]};
 }
 export const formatReceipt=result=>(result.outcome==='nothing'?'没事可做：':'')+result.summary+'\n\n```agent-autoloop\n'+JSON.stringify({events:result.events})+'\n```';
 if(process.argv[1]===fileURLToPath(import.meta.url)){try{console.log(formatReceipt(await collect(process.argv[2])));}catch(e){console.error(e.message);process.exitCode=1;}}
