@@ -3,6 +3,7 @@ import {readFile} from 'node:fs/promises';
 import {resolve,dirname,extname,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {Readable} from 'node:stream';
+import {listArtifacts,readArtifact,artifactCollectorReady} from './integrations/artifacts/store.mjs';
 import {createReports} from './integrations/project-tasks/reports.mjs';
 import {createGithubProjects} from './integrations/project-tasks/github-projects.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'dist');
@@ -23,9 +24,11 @@ export const server=createServer(async(req,res)=>{
    const rulesWrite=(req.method==='POST'&&path==='/v1/rules-file/check')||(req.method==='PUT'&&path==='/v1/rules-file');
    const projectApi=(req.method==='GET'&&path==='/projects/github')||(req.method==='POST'&&path==='/projects/github/check')||(req.method==='PUT'&&path==='/projects/github');
    const reportApi=req.method==='GET'&&path==='/reports';
-   if(!allowed&&!rulesWrite&&!projectApi&&!reportApi)return fail(404,'没有这个接口');
+   const artifactMatch=req.method==='GET'&&/^\/runs\/(\d+)\/artifacts(?:\/(\d+)\/([a-f0-9]{24}))?$/.exec(path);
+   if(!allowed&&!rulesWrite&&!projectApi&&!reportApi&&!artifactMatch)return fail(404,'没有这个接口');
    if(req.headers['sec-fetch-site']==='cross-site')return fail(403,'不允许跨站请求');
    if(req.headers.origin&&!['http://127.0.0.1:'+port,'http://localhost:'+port].includes(req.headers.origin))return fail(403,'不允许的来源');
+   if(artifactMatch){try{const [,run,attempt,id]=artifactMatch;if(!id){res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify({...listArtifacts(dirname(config),Number(run)),collectorReady:artifactCollectorReady(dirname(config))}));}else{const {item,data}=readArtifact(dirname(config),Number(run),Number(attempt),id);res.writeHead(200,{'content-type':'application/octet-stream','content-length':data.length,'content-disposition':"attachment; filename*=UTF-8''"+encodeURIComponent(item.name.split('/').pop()),'cache-control':'no-store','x-content-type-options':'nosniff','content-security-policy':"default-src 'none'; sandbox"});res.end(data);}}catch(e){fail(404,'成果不存在、已丢失或校验失败');}return;}
    if(reportApi){try{const name=url.searchParams.get('name');const result=name?await reports.read(url.searchParams.get('kind'),name):await reports.list();res.writeHead(200,{'content-type':'application/json','cache-control':'no-store','x-content-type-options':'nosniff'});res.end(JSON.stringify(result));}catch(e){fail(e.status|| (e.code==='ENOENT'?404:500),'报告读取失败：'+(e.status?e.message:'文件不存在或暂时无法读取'));}return;}
    let body;
    if(req.method==='POST'||req.method==='PUT'){

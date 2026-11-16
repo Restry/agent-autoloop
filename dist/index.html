@@ -131,6 +131,7 @@ body[data-mode="snapshot"] #conn::after{content:"只读";margin-left:8px;padding
 <div id="loading"><div class="spin"></div><strong>小镇正在准备</strong><span>正在搭建建筑与传送带</span></div>
 <script>setTimeout(function(){if(!window.__townReady){var l=document.getElementById("loading");if(l&&!l.classList.contains("done"))l.querySelector("span").textContent="加载时间较长。本页面需要联网加载 Three.js，并需要浏览器开启图形加速。";}},12000);</script>
 <script type="module">
+import {openArtifacts} from "./artifacts.js";
 import {openReports} from "./reports.js";
 const reportKind=name=>/早报|新闻/.test(name)?"morning":/日报|项目简报/.test(name)?"projects":null;
 const reportButton=name=>{const kind=reportKind(name);return kind?'<button class="ghost wide" data-report-kind="'+kind+'">查看报告与历史记录</button>':"";};
@@ -822,6 +823,7 @@ let whyOf=0,whyHtml='';
 function showRun(id){const r=findRun(id);if(!r)return closeInfo();const t=tasks.find(q=>q.id===id&&!q.done);inspectedTask=t||null;if(t)focusedTask=t;
  if(whyOf!==id){whyOf=id;whyHtml='';}
  let h='<p>'+esc(r.summary||'这一轮还没有结论。')+'</p>'+row('规则',esc(r.rule))+row('Agent',esc(agentName(r.agent)))+row('状态','<span role="status">'+esc(stateText(r))+'</span>')+row('创建',fmtT(r.createdAt))+row('领取',fmtT(r.claimedAt))+row('结束',fmtT(r.finishedAt));
+ h+='<button class="ghost wide" data-artifacts-run="'+r.id+'">交付成果 · 预览与下载</button>';
  h+=reportButton(r.rule);
  if(r.manual)h+=row('来历','本人手动运行');if(r.error)h+='<div class="task-warning"><strong>'+esc(taskAlert(r)?.label||'历史错误记录')+'</strong><p>'+esc(errorSummary(r.error))+'</p><details><summary>技术详情</summary><p>'+esc(r.error)+'</p></details>'+(r.state==='claimed'?'<small>这是上次失败的错误；当前重试尚未结束，不能据此认定恢复成功。</small>':'')+'</div>';if(r.usage)h+=row('用量',esc(Object.entries(r.usage).map(([k,v])=>k+' '+v).join(' · ')));if(r.link)h+=row('会话',esc(r.link));
  if(r.events&&r.events.length)h+='<div class="sublist"><span class="eyebrow">触发事件</span>'+r.events.map(e=>'<div>'+esc(sourceName(e.source))+' · '+esc(e.type)+(e.subject?' · '+esc(e.subject):'')+(e.summary?'<em>'+esc(e.summary)+'</em>':'')+'</div>').join('')+'</div>';
