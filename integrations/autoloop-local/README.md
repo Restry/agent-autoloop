@@ -30,3 +30,7 @@ Agent 小镇网页仓库位于本项目根目录，已有本地 Git 历史，当
 engine.patch 完整保存安装副本相对官方基线的受跟踪修改以及 host/ui.ts、worker/artifacts.mjs 新文件。已在基线源码目录执行 git apply --check 通过；本次没有实际向该干净源码目录应用补丁，没有推送官方仓库或 fork。数据库、凭据、rules.json 和报告正文均不包含在补丁中。
 
 更新官方程序前先检查并备份；不能把本地扩展误当作官方更新而覆盖。重新应用需要相同基线或先适配新版本。
+
+## 已部署的 fork 修复
+
+2026-11-16：当前权威源码为 Restry/agent-autoloop 的 codex/agent-town，提交 d783b97333f974206162a7b555fed41a2affcfa2，已推送并部署到本机。新增规则文件状态轮询，修正原生事件遗漏；规则 API 默认关闭，本机显式启用 hub.ui.rulesFile。完整快速测试 787 通过、21 跳过，类型与格式检查通过；独立复审通过，真实部署后的第 170 轮自检通过。原 engine.patch 与 BASE_COMMIT 是接入 fork 前的历史快照，不可覆盖到新安装。更新应使用 fork 工作分支。
