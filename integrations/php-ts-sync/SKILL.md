@@ -20,6 +20,8 @@ PHP 和 TS 后端共用同一个 GemFlow 前端。目标是让 TS 后端兼容�
 
 技能目录：`/Users/louis/projects/GenFlow/.claude/skills/php-ts-sync`。`last-sync.json` 是已验证的同步游标；`prepare-result.json` 是本轮更新检查记录。
 
+先读 `/Users/louis/projects/GenFlow/SOURCE_MAP.md`，分清远端 main 来源、原有本地定制与待复核同步改动。分类保存提交不等于业务验收。
+
 ## 1. 先更新全部代码
 
 直接运行固定入口，不套 Python、Shell 或引号嵌套：

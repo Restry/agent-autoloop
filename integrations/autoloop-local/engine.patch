@@ -1,0 +1,351 @@
+diff --git a/host/config.ts b/host/config.ts
+index eb11dad..6774fe5 100644
+--- a/host/config.ts
++++ b/host/config.ts
+@@ -8,7 +8,7 @@ import { privateDirectory } from "./files.ts";
+ export type ChannelConfig = { use?: string; key: string; [option: string]: unknown };
+ export type Config = {
+   url: string;
+-  hub?: { listen: string; publicUrl?: string };
++  hub?: { listen: string; publicUrl?: string; ui?: { origins?: string[]; remoteRules?: boolean } };
+   worker?: { name: string; key: string; capacity?: number; unreachable?: string[] };
+   channels?: Record<string, ChannelConfig>;
+   source?: { name: string; key: string };
+diff --git a/host/http.ts b/host/http.ts
+index ed49ae3..a2965c0 100644
+--- a/host/http.ts
++++ b/host/http.ts
+@@ -2,6 +2,7 @@
+ import { createServer } from "node:http";
+ import { Readable } from "node:stream";
+ import { makeHandler } from "./server.ts";
++import { PEER_HEADER } from "./ui.ts";
+ 
+ export function serve(port: number, host = "127.0.0.1", { commit = "dev" }: { commit?: string } = {}) {
+   const runtime = makeHandler(commit);
+@@ -13,7 +14,8 @@ export function serve(port: number, host = "127.0.0.1", { commit = "dev" }: { co
+         body: Readable.toWeb(req) as ReadableStream,
+         duplex: "half",
+       };
+-      const headers = req.headers as HeadersInit;
++      // Whatever a client wrote there is replaced: only the socket says where a request came from.
++      const headers = { ...req.headers, [PEER_HEADER]: req.socket.remoteAddress ?? "" } as HeadersInit;
+       const request = new Request(`http://${req.headers.host}${req.url}`, {
+         method: req.method,
+         headers,
+diff --git a/host/server.ts b/host/server.ts
+index bd0a860..cf15c17 100644
+--- a/host/server.ts
++++ b/host/server.ts
+@@ -5,6 +5,7 @@ import { basename, dirname } from "node:path";
+ import { RULES_FILE } from "./home.ts";
+ import { loadPlugin } from "./plugins.ts";
+ import * as hub from "./runtime.ts";
++import { withUi } from "./ui.ts";
+ import { AuthError, NotFound } from "../kernel/errors.ts";
+ import { createHandler } from "../kernel/http.ts";
+ 
+@@ -139,7 +140,7 @@ export function makeHandler(commit = "dev") {
+   });
+   fire();
+   return {
+-    handle,
++    handle: withUi(handle, { whose: hub.whose, parseRules: (json) => hub.parseRules(json), reload: fire }),
+     close() {
+       closed = true;
+       clearTimeout(timer);
+diff --git a/plugins/claude/agent.ts b/plugins/claude/agent.ts
+index 9b9359e..83de6d2 100644
+--- a/plugins/claude/agent.ts
++++ b/plugins/claude/agent.ts
+@@ -1,7 +1,7 @@
+ // Claude Code: the user's own, installed and signed in by them. This only ever runs the official program.
+ import { execFileSync } from "node:child_process";
+ import { commandLine } from "../../host/command.ts";
+-import { existsSync, readdirSync } from "node:fs";
++import { existsSync, readdirSync, lstatSync, realpathSync } from "node:fs";
+ import { homedir } from "node:os";
+ import path from "node:path";
+ import { findProgram, tail, type Adapter } from "../../worker/agents.ts";
+@@ -25,6 +25,25 @@ export function inTheApp() {
+   });
+ }
+ 
++/** Only prior attempts of this run may supply scratch handoff notes. */
++export function retryScratchFolders(folder: string): string[] {
++  const current = /^(\d+)-(\d+)$/.exec(path.basename(folder));
++  const parent = path.dirname(folder);
++  if (!current || path.basename(parent) !== "runs" || !existsSync(parent)) return [];
++  const root = realpathSync(parent);
++  return readdirSync(parent).flatMap((name) => {
++    const prior = /^(\d+)-(\d+)$/.exec(name);
++    if (!prior || prior[1] !== current[1] || Number(prior[2]) >= Number(current[2])) return [];
++    const scratch = path.join(parent, name, "scratch");
++    try {
++      const info = lstatSync(scratch);
++      return info.isDirectory() && !info.isSymbolicLink() && realpathSync(scratch).startsWith(root + path.sep)
++        ? [scratch]
++        : [];
++    } catch { return []; }
++  });
++}
++
+ export default {
+   command: (turn) => [
+     turn.program ?? findProgram("claude", inTheApp),
+@@ -41,6 +60,7 @@ export default {
+     PERMISSIONS[turn.access],
+     "--add-dir",
+     turn.folder,
++    ...retryScratchFolders(turn.folder).flatMap((folder) => ["--add-dir", folder]),
+     // Entering a worktree moves the whole transcript under the worktree's project folder (still so on 2.1.317): --resume
+     // finds it, but the desktop app, opening the session link from the run's folder, showed only its first message.
+     "--disallowedTools=EnterWorktree,ExitWorktree",
+diff --git a/tests/purity.test.ts b/tests/purity.test.ts
+index e8fe0c7..8a0e883 100644
+--- a/tests/purity.test.ts
++++ b/tests/purity.test.ts
+@@ -30,7 +30,7 @@ test("what loads and runs the plugins names none either: a new product is a new
+   for (const folder of ["host", "protocol", "worker"]) {
+     for (const file of readdirSync(join(root, folder)).filter((name) => name.endsWith(".ts"))) {
+       // What the worker keeps out of an agent's environment, of a session the worker itself may be in: nothing knows it else.
+-      const text = readFileSync(join(root, folder, file), "utf8").replace("CLAUDECODE$|CLAUDE_CODE_|CODEX_", "");
++      const text = readFileSync(join(root, folder, file), "utf8").replace("CLAUDECODE$|CLAUDE_CODE_(?:SESSION_ID|PARENT_SESSION_ID|ENTRYPOINT|SSE_PORT|SSE_TOKEN)$|CODEX_", "");
+       namesNoProduct(`${folder}/${file}`, text);
+     }
+   }
+diff --git a/tests/worker.test.ts b/tests/worker.test.ts
+index c7b3afc..51cc31d 100644
+--- a/tests/worker.test.ts
++++ b/tests/worker.test.ts
+@@ -251,6 +251,38 @@ test("a job runs in its rule's folder with the prompt and context file, and with
+   assert.equal(w.entries().length, 0, "handed in and let go");
+ });
+ 
++test("CLI configuration survives launch while parent session markers and hub secrets do not", async () => {
++  const values = {
++    CLAUDE_CODE_SUBAGENT_MODEL: "test-model",
++    CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: "1800000",
++    CLAUDE_CODE_CUSTOM_FUTURE_SETTING: "keep-custom",
++    ANTHROPIC_BASE_URL: "https://example.invalid",
++    CLAUDECODE: "nested-parent",
++    CLAUDE_CODE_SESSION_ID: "old-session",
++    CLAUDE_CODE_PARENT_SESSION_ID: "old-parent",
++    CLAUDE_CODE_ENTRYPOINT: "old-entrypoint",
++    CLAUDE_CODE_SSE_PORT: "1234",
++    CLAUDE_CODE_SSE_TOKEN: "old-token",
++    AGENT_AUTOLOOP_SECRET_TEST: "hub-secret",
++  };
++  const before = Object.fromEntries(Object.keys(values).map((key) => [key, process.env[key]]));
++  try {
++    Object.assign(process.env, values);
++    const hub = fakeHub();
++    hub.jobs.push(job({ command: [process.execPath, "-e", "require('fs').writeFileSync('environment-result.json',JSON.stringify(process.env));console.log('checked')"] }));
++    const w = worker(hub);
++    await until(w, () => hub.results.length === 1);
++    const env = JSON.parse(readFileSync(join(folder, "environment-result.json"), "utf8"));
++    for (const key of ["CLAUDE_CODE_SUBAGENT_MODEL", "CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS", "CLAUDE_CODE_CUSTOM_FUTURE_SETTING", "ANTHROPIC_BASE_URL"]) assert.equal(env[key], values[key]);
++    for (const key of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_PARENT_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT", "CLAUDE_CODE_SSE_TOKEN", "AGENT_AUTOLOOP_SECRET_TEST"]) assert.equal(env[key], undefined);
++    assert.ok(env.AGENT_AUTOLOOP_CONTEXT.endsWith("context.json"));
++  } finally {
++    for (const [key, value] of Object.entries(before)) {
++      if (value === undefined) delete process.env[key]; else process.env[key] = value;
++    }
++  }
++});
++
+ test("a bad exit code, or no last message, is a failure saying why", async () => {
+   const hub = fakeHub();
+   const bad = job({ command: ["/bin/sh", "-c", "echo boom >&2; exit 3"] });
+diff --git a/worker/worker.ts b/worker/worker.ts
+index c25d182..3e5c899 100644
+--- a/worker/worker.ts
++++ b/worker/worker.ts
+@@ -29,6 +29,9 @@ import { adapterFor, type Adapter, type Reading, type Turn, type Usage } from ".
+ import { promptFor, readMessage, repairPrompt, resultFrom } from "./contract.ts";
+ import { loadUsage, saveUsage, usageDelta } from "./usage.ts";
+ 
++// @ts-ignore Local optional artifact collector is deployed with this patch.
++import { prepareArtifacts, collectArtifacts, registerArtifactWorker } from "./artifacts.mjs";
++
+ const RUNS = path.join(HOME, "worker", "runs");
+ const NOTHING: Usage = { input: 0, output: 0, cached: 0, cost: 0 };
+ const TIMEOUT_MINUTES = 180;
+@@ -95,11 +98,11 @@ function sessionRise(entry: Entry, { session, sessionUsage }: Reading) {
+   return usageDelta(sessionUsage, session === entry.resume ? entry.usageBaseline : NOTHING);
+ }
+ 
+-/** What the agent's environment gets: never the hub's secrets, and nothing of a session the worker itself may be in. */
++/** Preserve CLI configuration; remove hub secrets and inherited parent-session markers. */
+ function agentEnvironment(entry: Entry) {
+   const env: NodeJS.ProcessEnv = {};
+   for (const [name, value] of Object.entries(process.env)) {
+-    if (/^(AGENT_AUTOLOOP_|CLAUDECODE$|CLAUDE_CODE_|CODEX_(?!HOME$))/.test(name)) continue;
++    if (/^(AGENT_AUTOLOOP_|CLAUDECODE$|CLAUDE_CODE_(?:SESSION_ID|PARENT_SESSION_ID|ENTRYPOINT|SSE_PORT|SSE_TOKEN)$|CODEX_(?!HOME$))/.test(name)) continue;
+     env[name] = value;
+   }
+   return {
+@@ -190,6 +193,7 @@ export function createWorker({
+   wait = WAIT,
+   now = Date.now,
+ }: WorkerOptions) {
++  try { registerArtifactWorker(HOME); } catch (error) { log(`artifact collector unavailable: ${error}`); }
+   let claim = randomUUID();
+   let unreachableSince: number | null = null;
+   let told = false;
+@@ -240,6 +244,10 @@ export function createWorker({
+       folder: entry.dir,
+     };
+     if (!existsSync(cwd)) throw new Error(`在 ${cwd} 启动不了：这个目录不存在`);
++    if (entry.turn === 1) {
++      try { prepareArtifacts(HOME, entry.run, entry.attempt, cwd, rule.name); }
++      catch (error) { log(`run ${entry.run}: artifact baseline failed: ${error}`); }
++    }
+     const argv = adapter.command(turn);
+     const { out, err, exit, command } = files(entry);
+     if (process.platform === "win32") {
+@@ -307,6 +315,8 @@ export function createWorker({
+   }
+ 
+   function endWith(entry: Entry, result: Result) {
++    try { collectArtifacts(HOME, entry.run, entry.attempt, result.outcome); }
++    catch (error) { log(`run ${entry.run}: artifact collection failed: ${error}`); }
+     entry.result = result;
+     save(entry);
+   }
+--- /dev/null
++++ b/host/ui.ts
+@@ -0,0 +1,108 @@
++// A browser page for the owner: answers it may read from another origin, and the rules file read and saved over HTTP.
++// Both are off until config.json says so. Saving rules is this machine's alone unless hub.ui.remoteRules is set.
++import { copyFileSync, existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
++import { readConfig } from "./config.ts";
++import { RULES_FILE } from "./home.ts";
++import { RulesError } from "../protocol/rules.ts";
++
++export const PEER_HEADER = "x-autoloop-peer";
++const MAX_RULES = 1024 * 1024;
++const LOOPBACK = /^(127\.\d+\.\d+\.\d+|::1|::ffff:127\.\d+\.\d+\.\d+)$/;
++
++type Hub = {
++  whose(kind: string, key: string): string | null;
++  parseRules(json: string): unknown;
++  reload(): void;
++};
++type Handle = (request: Request) => Promise<Response>;
++
++function settings() {
++  try {
++    const ui = (readConfig().hub as { ui?: { origins?: unknown; remoteRules?: unknown } } | undefined)?.ui;
++    const origins = Array.isArray(ui?.origins) ? ui.origins.filter((origin) => typeof origin === "string") : [];
++    return { origins: origins as string[], remoteRules: ui?.remoteRules === true };
++  } catch {
++    return { origins: [] as string[], remoteRules: false };
++  }
++}
++
++function corsHeaders(request: Request, origins: string[]): Record<string, string> {
++  const origin = request.headers.get("origin");
++  if (!origin || !origins.includes(origin)) return {};
++  return {
++    "access-control-allow-origin": origin,
++    "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
++    "access-control-allow-headers": "authorization, content-type, last-event-id",
++    "access-control-max-age": "600",
++    vary: "Origin",
++  };
++}
++
++const json = (value: unknown, status = 200) =>
++  Response.json(value, { status, headers: { "cache-control": "no-store" } });
++
++/** Whether this request came from this machine itself, and not through a proxy standing in front of the hub. */
++function local(request: Request) {
++  const forwarded = ["x-forwarded-for", "forwarded", "x-real-ip"].some((header) => request.headers.has(header));
++  return !forwarded && LOOPBACK.test(request.headers.get(PEER_HEADER) ?? "");
++}
++
++function problemOf(hub: Hub, text: string): string | null {
++  try {
++    hub.parseRules(text);
++    return null;
++  } catch (error) {
++    if (error instanceof RulesError || error instanceof SyntaxError) return (error as Error).message;
++    throw error;
++  }
++}
++
++async function rulesFile(hub: Hub, request: Request, path: string, remoteRules: boolean) {
++  const token = request.headers.get("authorization")?.replace(/^Bearer /, "") ?? "";
++  if (!hub.whose("owner", token)) return json({ error: "要本人自己的密钥" }, 401);
++  if (!remoteRules && !local(request)) {
++    return json({ error: "规则只能在装中台的这台电脑上读写；要远程读写，在 config.json 写 hub.ui.remoteRules: true" }, 403);
++  }
++  if (request.method === "GET" && path === "/v1/rules-file") {
++    if (!existsSync(RULES_FILE)) return json({ error: "找不到规则文件" }, 404);
++    const text = readFileSync(RULES_FILE, "utf8");
++    return json({ text, problem: problemOf(hub, text) });
++  }
++  const check = request.method === "POST" && path === "/v1/rules-file/check";
++  if (!check && !(request.method === "PUT" && path === "/v1/rules-file")) return json({ error: "没有这个地址" }, 404);
++  const body = await request.text();
++  if (body.length > MAX_RULES) return json({ error: "规则文件最多 1024 KB" }, 413);
++  let text: unknown;
++  try {
++    text = JSON.parse(body)?.text;
++  } catch {
++    return json({ error: "不是 JSON" }, 400);
++  }
++  if (typeof text !== "string" || !text.trim()) return json({ error: "要有 text：规则文件的全文" }, 400);
++  const problem = problemOf(hub, text);
++  if (problem) return json({ error: problem }, 400);
++  if (check) return json({ ok: true });
++  if (existsSync(RULES_FILE)) copyFileSync(RULES_FILE, `${RULES_FILE}.bak`);
++  writeFileSync(`${RULES_FILE}.tmp`, text.endsWith("\n") ? text : `${text}\n`, { mode: 0o600 });
++  renameSync(`${RULES_FILE}.tmp`, RULES_FILE);
++  hub.reload();
++  return json({ ok: true, backup: `${RULES_FILE}.bak` });
++}
++
++export function withUi(handle: Handle, hub: Hub): Handle {
++  return async (request) => {
++    const { origins, remoteRules } = settings();
++    const cors = corsHeaders(request, origins);
++    if (request.method === "OPTIONS" && request.headers.has("access-control-request-method")) {
++      return new Response(null, { status: Object.keys(cors).length ? 204 : 403, headers: cors });
++    }
++    const path = new URL(request.url).pathname;
++    const answer = path.startsWith("/v1/rules-file")
++      ? await rulesFile(hub, request, path, remoteRules)
++      : await handle(request);
++    if (!Object.keys(cors).length) return answer;
++    const headers = new Headers(answer.headers);
++    for (const [name, value] of Object.entries(cors)) headers.set(name, value);
++    return new Response(answer.body, { status: answer.status, headers });
++  };
++}
+--- /dev/null
++++ b/worker/artifacts.mjs
+@@ -0,0 +1,22 @@
++import fs from 'node:fs';
++import path from 'node:path';
++import {createHash} from 'node:crypto';
++const MAX_FILES=10000,MAX_BYTES=50*1024*1024,MAX_TOTAL=200*1024*1024;
++const excluded=new Set(['.git','node_modules','vendor','.venv','venv','__pycache__','.next','.cache','.idea','.autoloop-artifacts']);
++const privateName=n=>n.startsWith('.')||/^(?:secrets?|credentials?|auth|token|config)\.(?:env|json)$|\.(?:pem|key|p12|pfx|sqlite|db)(?:-wal|-shm)?$|^id_(?:rsa|ed25519)/i.test(n);
++const key=(run,attempt)=>{if(!Number.isSafeInteger(run)||run<1||!Number.isSafeInteger(attempt)||attempt<0)throw Error('Invalid run');return `${run}-${attempt}`;};
++const rootFor=(home,run,attempt)=>path.join(home,'artifacts',key(run,attempt));
++function json(file,data){fs.mkdirSync(path.dirname(file),{recursive:true,mode:0o700});fs.writeFileSync(file+'.tmp',JSON.stringify(data,null,2),{mode:0o600});fs.renameSync(file+'.tmp',file);}
++function scan(cwd){const files={},warnings=[];let count=0,limited=false;function walk(dir,relative='',depth=0){if(depth>24){warnings.push('目录层级超过限制');return;}let entries;try{entries=fs.readdirSync(dir,{withFileTypes:true});}catch{warnings.push('部分目录无法读取');return;}for(const e of entries){if(++count>MAX_FILES){limited=true;return;}if(excluded.has(e.name)||privateName(e.name)||e.isSymbolicLink())continue;const name=relative?relative+'/'+e.name:e.name,p=path.join(dir,e.name);if(e.isDirectory())walk(p,name,depth+1);else if(e.isFile()){try{const s=fs.lstatSync(p);files[name]={size:s.size,mtime:s.mtimeMs,ctime:s.ctimeMs};}catch{warnings.push('部分文件无法读取');}}if(limited)return;}}walk(cwd);if(limited)warnings.push('扫描超过 10000 项，部分文件未收集');return {files,warnings,limited};}
++export function prepareArtifacts(home,run,attempt,cwd,rule){const root=rootFor(home,run,attempt),file=path.join(root,'baseline.json');if(fs.existsSync(file))return;const base=scan(cwd);json(file,{cwd:fs.realpathSync(cwd),rule,at:new Date().toISOString(),...base});json(path.join(root,'index.json'),{run,attempt,rule,status:'collecting',files:[],warnings:base.warnings});}
++function safeRead(cwd,name){if(path.isAbsolute(name)||name.split(/[\\/]/).some(p=>p==='..'||privateName(p)||excluded.has(p)))throw Error('文件路径不允许');const root=fs.realpathSync(cwd),p=path.resolve(root,name),real=fs.realpathSync(p);if(real!==p||!real.startsWith(root+path.sep))throw Error('不收集符号链接或目录外文件');const fd=fs.openSync(p,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW);try{const before=fs.fstatSync(fd);if(!before.isFile()||before.size>MAX_BYTES)throw Error('非普通文件或超过 50 MB');const data=fs.readFileSync(fd),after=fs.fstatSync(fd);if(data.length>MAX_BYTES||before.mtimeMs!==after.mtimeMs||before.size!==after.size)throw Error('文件写入中，请查看后续轮次');return data;}finally{fs.closeSync(fd);}}
++export function collectArtifacts(home,run,attempt,outcome){const root=rootFor(home,run,attempt),baseline=path.join(root,'baseline.json');if(!fs.existsSync(baseline)){json(path.join(root,'index.json'),{run,attempt,status:'untracked',outcome,files:[],warnings:['本轮启动时未启用文件收集，无法确认文件归属']});return;}const base=JSON.parse(fs.readFileSync(baseline)),now=scan(base.cwd),items=[];let total=0;const warnings=[...base.warnings,...now.warnings];for(const [name,s] of Object.entries(now.files)){const old=base.files[name];if(old&&old.size===s.size&&old.mtime===s.mtime&&old.ctime===s.ctime)continue;if(!old&&base.limited){warnings.push('基线扫描不完整，未归属的文件不收集');continue;}try{const data=safeRead(base.cwd,name);if(total+data.length>MAX_TOTAL||items.length>=200){warnings.push('成果超过每轮 200 个文件或 200 MB，剩余文件未收集');break;}total+=data.length;const id=createHash('sha256').update(name).digest('hex').slice(0,24),sha256=createHash('sha256').update(data).digest('hex');fs.mkdirSync(path.join(root,'files'),{recursive:true,mode:0o700});fs.writeFileSync(path.join(root,'files',id),data,{mode:0o600});items.push({id,name,size:data.length,sha256,change:old?'modified':'created'});}catch(e){warnings.push(name+'：'+e.message);}}
++ // Concurrent runs in the same directory cannot be attributed reliably from file changes alone.
++ for(const entry of fs.readdirSync(path.join(home,'artifacts'))){if(entry===key(run,attempt))continue;try{const other=JSON.parse(fs.readFileSync(path.join(home,'artifacts',entry,'baseline.json')));const index=JSON.parse(fs.readFileSync(path.join(home,'artifacts',entry,'index.json')));if(other.cwd===base.cwd&&(!index.finishedAt||index.finishedAt>=base.at)){warnings.push('同一目录存在重叠执行的轮次，文件变化可能由多个任务共同产生');break;}}catch{}}
++ json(path.join(root,'index.json'),{run,attempt,rule:base.rule,status:'collected',outcome,startedAt:base.at,finishedAt:new Date().toISOString(),files:items,warnings:[...new Set(warnings)]});
++}
++export function importArtifact(home,run,attempt,cwd,name,rule,evidence){const root=rootFor(home,run,attempt),data=safeRead(cwd,name),id=createHash('sha256').update(name).digest('hex').slice(0,24);fs.mkdirSync(path.join(root,'files'),{recursive:true,mode:0o700});fs.writeFileSync(path.join(root,'files',id),data,{mode:0o600});json(path.join(root,'index.json'),{run,attempt,rule,status:'imported',finishedAt:new Date().toISOString(),warnings:['历史补录：'+evidence+'；保存的是补录时文件版本'],files:[{id,name,size:data.length,sha256:createHash('sha256').update(data).digest('hex'),change:'imported'}]});}
++export function listArtifacts(home,run){key(run,0);const root=path.join(home,'artifacts');if(!fs.existsSync(root))return {run,attempts:[]};return {run,attempts:fs.readdirSync(root).filter(n=>new RegExp('^'+run+'-\\d+$').test(n)).map(n=>JSON.parse(fs.readFileSync(path.join(root,n,'index.json')))).sort((a,b)=>b.attempt-a.attempt)};}
++export function readArtifact(home,run,attempt,id){if(!/^[a-f0-9]{24}$/.test(id))throw Error('成果不存在');const root=fs.realpathSync(rootFor(home,run,attempt)),index=JSON.parse(fs.readFileSync(path.join(root,'index.json'))),item=index.files.find(f=>f.id===id);if(!item)throw Error('成果不存在');const p=path.join(root,'files',id);if(fs.realpathSync(p)!==p)throw Error('不允许的文件');const data=fs.readFileSync(p);if(createHash('sha256').update(data).digest('hex')!==item.sha256)throw Error('成果快照校验失败');return {item,data};}
++export function registerArtifactWorker(home){json(path.join(home,'artifacts','worker-state.json'),{pid:process.pid,startedAt:new Date().toISOString()});}
++export function artifactCollectorReady(home){try{const state=JSON.parse(fs.readFileSync(path.join(home,'artifacts','worker-state.json')));process.kill(state.pid,0);return true;}catch{return false;}}
