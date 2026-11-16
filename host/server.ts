@@ -5,6 +5,7 @@ import { basename, dirname } from "node:path";
 import { RULES_FILE } from "./home.ts";
 import { loadPlugin } from "./plugins.ts";
 import * as hub from "./runtime.ts";
+import { withUi } from "./ui.ts";
 import { AuthError, NotFound } from "../kernel/errors.ts";
 import { createHandler } from "../kernel/http.ts";
 
@@ -139,7 +140,7 @@ export function makeHandler(commit = "dev") {
   });
   fire();
   return {
-    handle,
+    handle: withUi(handle, { whose: hub.whose, parseRules: (json) => hub.parseRules(json), reload: fire }),
     close() {
       closed = true;
       clearTimeout(timer);

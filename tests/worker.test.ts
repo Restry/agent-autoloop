@@ -251,6 +251,62 @@ test("a job runs in its rule's folder with the prompt and context file, and with
   assert.equal(w.entries().length, 0, "handed in and let go");
 });
 
+test("CLI configuration survives launch while parent session markers and hub secrets do not", async () => {
+  const values: Record<string, string> = {
+    CLAUDE_CODE_SUBAGENT_MODEL: "test-model",
+    CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: "1800000",
+    CLAUDE_CODE_CUSTOM_FUTURE_SETTING: "keep-custom",
+    ANTHROPIC_BASE_URL: "https://example.invalid",
+    CLAUDECODE: "nested-parent",
+    CLAUDE_CODE_SESSION_ID: "old-session",
+    CLAUDE_CODE_PARENT_SESSION_ID: "old-parent",
+    CLAUDE_CODE_ENTRYPOINT: "old-entrypoint",
+    CLAUDE_CODE_SSE_PORT: "1234",
+    CLAUDE_CODE_SSE_TOKEN: "old-token",
+    AGENT_AUTOLOOP_SECRET_TEST: "hub-secret",
+  };
+  const before = Object.fromEntries(Object.keys(values).map((key) => [key, process.env[key]]));
+  try {
+    Object.assign(process.env, values);
+    const hub = fakeHub();
+    hub.jobs.push(
+      job({
+        command: [
+          process.execPath,
+          "-e",
+          "require('fs').writeFileSync('environment-result.json',JSON.stringify(process.env));console.log('checked')",
+        ],
+      }),
+    );
+    const w = worker(hub);
+    await until(w, () => hub.results.length === 1);
+    const env = JSON.parse(readFileSync(join(folder, "environment-result.json"), "utf8"));
+    for (const key of [
+      "CLAUDE_CODE_SUBAGENT_MODEL",
+      "CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS",
+      "CLAUDE_CODE_CUSTOM_FUTURE_SETTING",
+      "ANTHROPIC_BASE_URL",
+    ])
+      assert.equal(env[key], values[key]);
+    for (const key of [
+      "CLAUDECODE",
+      "CLAUDE_CODE_SESSION_ID",
+      "CLAUDE_CODE_PARENT_SESSION_ID",
+      "CLAUDE_CODE_ENTRYPOINT",
+      "CLAUDE_CODE_SSE_PORT",
+      "CLAUDE_CODE_SSE_TOKEN",
+      "AGENT_AUTOLOOP_SECRET_TEST",
+    ])
+      assert.equal(env[key], undefined);
+    assert.ok(env.AGENT_AUTOLOOP_CONTEXT.endsWith("context.json"));
+  } finally {
+    for (const [key, value] of Object.entries(before)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
 test("a bad exit code, or no last message, is a failure saying why", async () => {
   const hub = fakeHub();
   const bad = job({ command: ["/bin/sh", "-c", "echo boom >&2; exit 3"] });

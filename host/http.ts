@@ -2,6 +2,7 @@
 import { createServer } from "node:http";
 import { Readable } from "node:stream";
 import { makeHandler } from "./server.ts";
+import { PEER_HEADER } from "./ui.ts";
 
 export function serve(port: number, host = "127.0.0.1", { commit = "dev" }: { commit?: string } = {}) {
   const runtime = makeHandler(commit);
@@ -13,7 +14,13 @@ export function serve(port: number, host = "127.0.0.1", { commit = "dev" }: { co
         body: Readable.toWeb(req) as ReadableStream,
         duplex: "half",
       };
-      const headers = req.headers as HeadersInit;
+      // Whatever a client wrote there is replaced: only the socket says where a request came from.
+      const headers = new Headers();
+      for (const [name, value] of Object.entries(req.headers)) {
+        if (Array.isArray(value)) for (const item of value) headers.append(name, item);
+        else if (value !== undefined) headers.set(name, value);
+      }
+      headers.set(PEER_HEADER, req.socket.remoteAddress ?? "");
       const request = new Request(`http://${req.headers.host}${req.url}`, {
         method: req.method,
         headers,

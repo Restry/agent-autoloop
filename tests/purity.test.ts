@@ -30,7 +30,10 @@ test("what loads and runs the plugins names none either: a new product is a new 
   for (const folder of ["host", "protocol", "worker"]) {
     for (const file of readdirSync(join(root, folder)).filter((name) => name.endsWith(".ts"))) {
       // What the worker keeps out of an agent's environment, of a session the worker itself may be in: nothing knows it else.
-      const text = readFileSync(join(root, folder, file), "utf8").replace("CLAUDECODE$|CLAUDE_CODE_|CODEX_", "");
+      const text = readFileSync(join(root, folder, file), "utf8").replace(
+        "CLAUDECODE$|CLAUDE_CODE_(?:SESSION_ID|PARENT_SESSION_ID|ENTRYPOINT|SSE_PORT|SSE_TOKEN)$|CODEX_",
+        "",
+      );
       namesNoProduct(`${folder}/${file}`, text);
     }
   }

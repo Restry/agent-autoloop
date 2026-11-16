@@ -29,6 +29,9 @@ import { adapterFor, type Adapter, type Reading, type Turn, type Usage } from ".
 import { promptFor, readMessage, repairPrompt, resultFrom } from "./contract.ts";
 import { loadUsage, saveUsage, usageDelta } from "./usage.ts";
 
+// @ts-ignore Local optional artifact collector is deployed with this patch.
+import { prepareArtifacts, collectArtifacts, registerArtifactWorker } from "./artifacts.mjs";
+
 const RUNS = path.join(HOME, "worker", "runs");
 const NOTHING: Usage = { input: 0, output: 0, cached: 0, cost: 0 };
 const TIMEOUT_MINUTES = 180;
@@ -95,11 +98,16 @@ function sessionRise(entry: Entry, { session, sessionUsage }: Reading) {
   return usageDelta(sessionUsage, session === entry.resume ? entry.usageBaseline : NOTHING);
 }
 
-/** What the agent's environment gets: never the hub's secrets, and nothing of a session the worker itself may be in. */
+/** Preserve CLI configuration; remove hub secrets and inherited parent-session markers. */
 function agentEnvironment(entry: Entry) {
   const env: NodeJS.ProcessEnv = {};
   for (const [name, value] of Object.entries(process.env)) {
-    if (/^(AGENT_AUTOLOOP_|CLAUDECODE$|CLAUDE_CODE_|CODEX_(?!HOME$))/.test(name)) continue;
+    if (
+      /^(AGENT_AUTOLOOP_|CLAUDECODE$|CLAUDE_CODE_(?:SESSION_ID|PARENT_SESSION_ID|ENTRYPOINT|SSE_PORT|SSE_TOKEN)$|CODEX_(?!HOME$))/.test(
+        name,
+      )
+    )
+      continue;
     env[name] = value;
   }
   return {
@@ -190,6 +198,11 @@ export function createWorker({
   wait = WAIT,
   now = Date.now,
 }: WorkerOptions) {
+  try {
+    registerArtifactWorker(HOME);
+  } catch (error) {
+    log(`artifact collector unavailable: ${error}`);
+  }
   let claim = randomUUID();
   let unreachableSince: number | null = null;
   let told = false;
@@ -240,6 +253,13 @@ export function createWorker({
       folder: entry.dir,
     };
     if (!existsSync(cwd)) throw new Error(`在 ${cwd} 启动不了：这个目录不存在`);
+    if (entry.turn === 1) {
+      try {
+        prepareArtifacts(HOME, entry.run, entry.attempt, cwd, rule.name);
+      } catch (error) {
+        log(`run ${entry.run}: artifact baseline failed: ${error}`);
+      }
+    }
     const argv = adapter.command(turn);
     const { out, err, exit, command } = files(entry);
     if (process.platform === "win32") {
@@ -307,6 +327,11 @@ export function createWorker({
   }
 
   function endWith(entry: Entry, result: Result) {
+    try {
+      collectArtifacts(HOME, entry.run, entry.attempt, result.outcome);
+    } catch (error) {
+      log(`run ${entry.run}: artifact collection failed: ${error}`);
+    }
     entry.result = result;
     save(entry);
   }
