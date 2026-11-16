@@ -84,6 +84,7 @@ body[data-mode="snapshot"] #conn::after{content:"只读";margin-left:8px;padding
 .agents{width:268px;overflow-x:hidden}.agents button>div{min-width:0;flex:1}.agents .sub{white-space:normal;overflow-wrap:anywhere;line-height:1.4}.agents .signal{flex:none}@media(max-width:820px){.agents{width:210px}}
 .github-modal{width:min(620px,calc(100vw - 32px));max-height:90vh;overflow:auto;padding:26px;position:relative}.github-modal h2{margin:10px 0}.github-modal p{font-size:12px;line-height:1.8;color:var(--muted)}.github-choice{display:flex;align-items:center;gap:9px;font-size:12px;margin:13px 0}.github-choice input{width:auto}#project-github{margin:8px 0 14px}.github-modal #github-msg{min-height:20px;color:var(--accent)}
 .audio-modal{position:relative;width:min(530px,calc(100vw - 32px));max-height:90vh;overflow:auto;padding:28px}.audio-modal h2{margin:10px 0 18px}.audio-master,.audio-category>label{display:flex;gap:9px;align-items:center;font-size:13px}.audio-modal input[type=checkbox]{width:auto;accent-color:var(--accent)}.audio-modal input[type=range]{padding:0;accent-color:var(--accent)}.audio-level{display:flex;align-items:center;gap:12px;font-size:12px}.audio-level input{flex:1;min-width:0}.audio-level output{width:36px;text-align:right}.audio-category{border-top:1px solid var(--line);padding:14px 0;display:grid;grid-template-columns:1fr auto;gap:10px}.audio-category .audio-level{grid-column:1}.audio-category button{grid-column:2;grid-row:1 / 3;font-size:11px;align-self:center}.audio-modal p,.audio-modal small{font-size:11px;line-height:1.7;color:var(--muted)}#audio-preview-status{min-height:18px}
+.task-alert-summary{display:block;width:100%;margin:10px 0;padding:11px;text-align:left;color:#873d24;background:#e9a46440;border:1px solid #b6644480;border-radius:9px;font-size:12px;line-height:1.6}.task-alert-summary[hidden]{display:none}.task-warning{margin:14px 0;padding:13px;border-left:3px solid #c76c43;background:#d48b4030;border-radius:6px}.task-warning strong{color:#a34a2b}.task-warning p{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;line-height:1.7}.has-task-error{border-color:#c76c43!important;box-shadow:0 0 0 2px #c76c4328}.has-task-error:before{content:"!";color:#bd552b;font-weight:700;margin-right:5px}body[data-theme=night] .task-warning strong,body[data-theme=night] .task-alert-summary{color:#ffbd8a}
 </style>
 <script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/addons/"}}</script></head>
 <body data-theme="dusk">
@@ -91,7 +92,7 @@ body[data-mode="snapshot"] #conn::after{content:"只读";margin-left:8px;padding
 <header><div class="brand panel"><svg width="26" height="26" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m14 2 10.4 6v12L14 26 3.6 20V8L14 2Z"/><path d="m3.6 8 10.4 6 10.4-6M14 14v12"/></svg><div><strong>Agent 小镇</strong><span>Agent Autoloop 中台</span></div></div>
 <div class="clock panel" id="conn"><i class="live"></i><span id="conn-text">未连接</span></div>
 <div class="right"><button id="github-new">接入 GitHub</button><button id="rules-open" class="panel hbtn">规则文件</button><button id="runs-open" class="panel hbtn">轮次记录</button><button id="overview" class="panel hbtn">回到全景 ↗</button><button id="leave" class="panel hbtn">退出</button></div></header>
-<aside class="stats panel" aria-label="中台概况"><span class="eyebrow">中台概况</span><div id="totals"></div><p id="spend"></p>
+<aside class="stats panel" aria-label="中台概况"><span class="eyebrow">中台概况</span><div id="totals"></div><button id="task-alerts-open" class="task-alert-summary" hidden></button><p id="spend"></p>
 <div class="cards-head"><span class="eyebrow">待你拍板</span><b id="card-count">0</b></div><div id="card-list"></div></aside>
 <aside class="agents panel"><span class="eyebrow">执行工作站</span><div id="agent-list"></div></aside>
 <aside id="detail" class="detail panel" hidden aria-label="分组详情"><button id="close-detail" class="close" aria-label="关闭分组详情">×</button><span class="eyebrow">分组院落</span><h2 id="project-title"></h2><p id="project-desc"></p>
@@ -131,6 +132,7 @@ body[data-mode="snapshot"] #conn::after{content:"只读";margin-left:8px;padding
 <script>setTimeout(function(){if(!window.__townReady){var l=document.getElementById("loading");if(l&&!l.classList.contains("done"))l.querySelector("span").textContent="加载时间较长。本页面需要联网加载 Three.js，并需要浏览器开启图形加速。";}},12000);</script>
 <script type="module">
 import * as T from 'three';
+import {taskAlert,taskAlerts,errorSummary} from './task-alerts.js';
 import {TownAudio,THEMES} from './town-audio.js?v=1';
 import {groupStationAgents,executorKind} from './station-model.js?v=1';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
@@ -651,7 +653,7 @@ document.addEventListener('visibilitychange',()=>audio.setVisible(!document.hidd
 // ================= 轮次（包裹）：由中台的真实状态驱动 =================
 let running=!reduced,sim=0,selected=-1,selectedArea=0,focusedTask=null,inspectedTask=null,cameraTween=null,night=false,lightMix=1,lightTarget=1,firstState=true,rebuilding=false;
 const tasks=[],seenRuns=new Set(),seenCards=new Set(),parcelPicks=[];
-const stateText=r=>r.state==='queued'?(r.attempts>0?'没跑成，等重试（已失败 '+r.attempts+' 次）':'排队中'):r.state==='claimed'?(r.stopping?'正在停止':'Agent 正在处理'):r.state==='unknown'?'不确定是否还在跑':r.state==='done'?'做成了':r.state==='nothing'?'看过了，没事可做':r.state==='cancelled'?'结束了，没做成':String(r.state);
+const stateText=r=>r.state==='queued'?(r.attempts>0?'没跑成，等重试（已失败 '+r.attempts+' 次）':'排队中'):r.state==='claimed'?(r.stopping?'正在停止':taskAlert(r)?.historical?'重试处理中 · 上次有错误':'Agent 正在处理'):r.state==='unknown'?'不确定是否还在跑':r.state==='done'?'做成了':r.state==='nothing'?'看过了，没事可做':r.state==='cancelled'?'结束了，没做成':String(r.state);
 const topoSig=s=>JSON.stringify([s.lines.map(l=>[l.name,l.group,l.agent]),s.agents.map(a=>[a.id,a.name,a.use,a.worker]),s.sources.map(x=>[x.id,x.name]),s.channels.map(x=>[x.id,x.name]),(s.elsewhere||[]).map(x=>x.name)]);
 const builtSig=topoSig(S);
 function makeParcel(ad,task){const g=new T.Group();g.rotation.order='YXZ';scene.add(g);const body=new T.Group();g.add(body);dyn(G.box,M.kraft,body,0,.19,0).scale.set(.42,.36,.42);dyn(G.box,ad.mat,body,0,.19,0).scale.set(.44,.37,.11);dyn(G.box,ad.mat,body,0,.19,0).scale.set(.11,.37,.44);
@@ -762,7 +764,7 @@ agents.forEach((a,i)=>{const b=document.createElement('button');b.innerHTML='<i 
 if(!agents.length)$('#agent-list').innerHTML='<p class="none">规则文件里还没有 Agent。</p>';
 let infoView=null,selectedRule=0,history=null;
 function renderHud(){
- const t=S.totals||{},sp=S.spending||{};
+ const t=S.totals||{},sp=S.spending||{},alerts=taskAlerts(S.runs);const alertButton=$('#task-alerts-open');alertButton.hidden=!alerts.length;alertButton.textContent=alerts.length?'任务异常 '+alerts.length+' · '+alerts[0].rule+'：'+alerts[0].label:'';
  $('#totals').innerHTML=[['正在处理',t.running],['排队',t.queued],['等重试',t.retrying],['不确定',t.unknown],['今日完成',t.doneToday],['待你拍板',t.attention]].map(([k,v])=>'<div><b>'+esc(v??0)+'</b><span>'+k+'</span></div>').join('');
  const spend=(name,d)=>d?name+' '+num(d.rounds)+' 轮 · '+fmtN(d.tokens)+' Token · 费用 '+(+d.cost||0).toFixed(2)+(d.missingTokens||d.missingCost?'（部分轮次没有上报用量）':''):'';
  $('#spend').textContent=[spend('今天',sp.today),spend('近 7 天',sp.week)].filter(Boolean).join('　');
@@ -770,7 +772,7 @@ function renderHud(){
  $('#card-list').innerHTML=S.cards.length?S.cards.map(c=>'<button data-act="card" data-id="'+esc(c.id)+'"><i class="k '+(c.kind==='ask'?'ask':'notice')+'"></i><strong>'+esc(c.title)+'</strong><span>'+esc(c.rule||'中台')+' · '+(c.kind==='ask'?'等你决定':'通知')+'</span></button>').join(''):'<p class="none">没有等你处理的卡片。</p>';
  agents.forEach(a=>{const run=activeRuns(r=>a.memberIds.includes(r.agent)&&r.state!=='queued').length,all=activeRuns(r=>a.memberIds.includes(r.agent)).length;const ready=S.localAgentReadiness?.[a.key];a.statusEl.textContent=!a.data.online?'电脑离线':run?'处理中 '+run+' 轮':ready?.ready===false?'待登录':ready?.ready===true||a.key==='script'?'可接任务':'电脑在线';a.signalEl.textContent=all;a.rowEl.classList.toggle('busy',a.data.online&&run>0);a.rowEl.classList.toggle('offline',!a.data.online);a.label.el.classList.toggle('offline',!a.data.online);});
  workerLabels.forEach(w=>{const on=S.agents.some(a=>a.worker===w.name&&a.online);w.el.classList.toggle('offline',!on);w.el.querySelector('small').textContent=on?'在线':'离线';});
- projects.forEach(p=>{const names=new Set(p.lines.map(l=>l.name)),n=activeRuns(r=>names.has(r.rule)).length;p.label.el.querySelector('.count').textContent=n;p.label.el.classList.toggle('active',n>0);
+ projects.forEach(p=>{const names=new Set(p.lines.map(l=>l.name)),n=activeRuns(r=>names.has(r.rule)).length;p.label.el.querySelector('.count').textContent=n;p.label.el.classList.toggle('active',n>0);const warnings=taskAlerts(S.runs.filter(r=>names.has(r.rule)));p.label.el.classList.toggle('has-task-error',warnings.length>0);p.label.el.title=warnings.length?warnings[0].label+'：'+warnings[0].error:'';
   let skipped=0;p.lines.forEach(l=>{skipped+=(l.paused&&l.paused.skipped&&l.paused.skipped.count)||0;});p.pile.forEach((m,k)=>m.visible=k<Math.min(3,skipped));
   p.workspaces.forEach(a=>{const l=a.line,run=activeRuns(r=>r.rule===l.name&&r.state!=='queued').length,q=activeRuns(r=>r.rule===l.name).length,color=l.paused?'#8a8478':run?agentColor(l.agent):q?PAL.gold:'#90a68a';a.indicatorMat.color.set(color);a.indicatorMat.emissive.set(color);a.indicatorMat.emissiveIntensity=l.paused?.05:q?1.1:.25;a.chip.el.querySelector('.t').textContent=(l.paused?'⏸ ':'')+l.name;});});
  sources.forEach(o=>o.label.el.querySelector('.count').textContent=o.events);
@@ -794,9 +796,10 @@ function selectArea(i,j){if(selected!==i)selectProject(i);else uiTick();selected
 function updateDetail(){if(selected<0)return;const p=projects[selected],l=p.lines[selectedRule]||p.lines[0];
  const ghProject=Object.values(S.githubProjects||{}).find(g=>g.group===p.name);$('#project-github').textContent=ghProject?'GitHub · '+ghProject.repo+(ghProject.enabled?'':'（已停用）'):'配置 GitHub 仓库';
  $('#project-desc').textContent='这个分组有 '+p.lines.length+' 条规则，它们排同一条队。'+(p.lines.length>p.workspaces.length?'院子里只画了前 '+p.workspaces.length+' 间小屋，其余规则在下面的列表里。':'');
- $('#rooms').innerHTML=p.lines.map((q,j)=>{const act=activeRuns(r=>r.rule===q.name).length;return '<button data-act="rule" data-id="'+j+'" class="'+(q===l?'selected':'')+'"><i class="r-dot" style="background:'+agentColor(q.agent)+'"></i><span class="r-name">'+esc(sourceName(q.source))+'</span><span class="r-agent">'+esc(agentName(q.agent))+'</span><strong>'+esc(q.name)+'</strong><span class="r-state">'+(q.paused?'已暂停':act?act+' 轮进行中':'空闲')+'</span></button>';}).join('');
+ $('#rooms').innerHTML=p.lines.map((q,j)=>{const act=activeRuns(r=>r.rule===q.name).length;return '<button data-act="rule" data-id="'+j+'" class="'+(q===l?'selected':'')+'"><i class="r-dot" style="background:'+agentColor(q.agent)+'"></i><span class="r-name">'+esc(sourceName(q.source))+'</span><span class="r-agent">'+esc(agentName(q.agent))+'</span><strong>'+esc(q.name)+'</strong><span class="r-state">'+(taskAlerts(S.runs.filter(r=>r.rule===q.name))[0]?.label||(q.paused?'已暂停':act?act+' 轮进行中':'空闲'))+'</span></button>';}).join('');
  if(!l)return;const tt=l.totals||{},pa=l.paused,later=(S.skipped||[]).filter(e=>(e.rules||[]).includes(l.name));
  let h=row('触发',l.source==='schedule'?esc(l.every||'定时')+'，下次 '+fmtT(l.next):esc(sourceName(l.source))+' · '+esc((l.types||[]).join('、')))+row('交给',esc(agentName(l.agent)))+row('进行中',num(tt.running)+' 处理 · '+num(tt.queued)+' 排队 · '+num(tt.retrying)+' 等重试')+row('累计',num(tt.done)+' 做成 · '+num(tt.nothing)+' 没事可做');
+ const issues=taskAlerts(S.runs.filter(r=>r.rule===l.name));if(issues.length)h+='<div class="task-warning"><strong>'+esc(issues[0].label)+'</strong><p>'+esc(errorSummary(issues[0].error))+'</p><button class="ghost" data-act="run" data-id="'+issues[0].id+'">查看出错轮次</button></div>';
  if(pa)h+=row('暂停',esc(pa.by||'')+' 于 '+fmtT(pa.since)+(pa.until?'，到 '+fmtT(pa.until):''))+(pa.reason?row('原因',esc(pa.reason)):'')+(pa.skipped?row('暂停期间跳过',esc(pa.skipped.count)+' 条事件'):'');
  if(!pa&&later.length)h+=row('最近因暂停跳过',later.length+' 条事件（已补跑过的不会重复补）');
  h+='<div class="btns"><button class="primary" data-act="runrule">立即运行一轮</button><button class="ghost" data-act="'+(pa?'resume':'pause')+'">'+(pa?'恢复':'暂停')+'</button>'+(!pa&&later.length?'<button class="ghost" data-act="replay">补跑跳过的事件</button>':'')+'</div>';
@@ -815,7 +818,7 @@ let whyOf=0,whyHtml='';
 function showRun(id){const r=findRun(id);if(!r)return closeInfo();const t=tasks.find(q=>q.id===id&&!q.done);inspectedTask=t||null;if(t)focusedTask=t;
  if(whyOf!==id){whyOf=id;whyHtml='';}
  let h='<p>'+esc(r.summary||'这一轮还没有结论。')+'</p>'+row('规则',esc(r.rule))+row('Agent',esc(agentName(r.agent)))+row('状态','<span role="status">'+esc(stateText(r))+'</span>')+row('创建',fmtT(r.createdAt))+row('领取',fmtT(r.claimedAt))+row('结束',fmtT(r.finishedAt));
- if(r.manual)h+=row('来历','本人手动运行');if(r.error)h+=row('最近一次错误',esc(r.error));if(r.usage)h+=row('用量',esc(Object.entries(r.usage).map(([k,v])=>k+' '+v).join(' · ')));if(r.link)h+=row('会话',esc(r.link));
+ if(r.manual)h+=row('来历','本人手动运行');if(r.error)h+='<div class="task-warning"><strong>'+esc(taskAlert(r)?.label||'历史错误记录')+'</strong><p>'+esc(errorSummary(r.error))+'</p><details><summary>技术详情</summary><p>'+esc(r.error)+'</p></details>'+(r.state==='claimed'?'<small>这是上次失败的错误；当前重试尚未结束，不能据此认定恢复成功。</small>':'')+'</div>';if(r.usage)h+=row('用量',esc(Object.entries(r.usage).map(([k,v])=>k+' '+v).join(' · ')));if(r.link)h+=row('会话',esc(r.link));
  if(r.events&&r.events.length)h+='<div class="sublist"><span class="eyebrow">触发事件</span>'+r.events.map(e=>'<div>'+esc(sourceName(e.source))+' · '+esc(e.type)+(e.subject?' · '+esc(e.subject):'')+(e.summary?'<em>'+esc(e.summary)+'</em>':'')+'</div>').join('')+'</div>';
  h+='<div class="btns">'+(!FIN(r.state)&&!r.stopping?'<button class="primary" data-act="cancel" data-id="'+esc(r.id)+'">停止这一轮</button>':'')+'<button class="ghost" data-act="why" data-id="'+esc(r.id)+'">来龙去脉</button>'+(areaOfRule[r.rule]?'<button class="ghost" data-act="locate" data-id="'+esc(r.id)+'">所属院落</button>':'')+'</div><div id="why-out">'+whyHtml+'</div>';
  info('第 '+esc(r.id)+' 轮',r.rule,h,()=>showRun(id));}
@@ -838,7 +841,9 @@ function showAgent(i){const a=agents[i],d=a.data,tt=d.totals||{};const runs=acti
 function focusAgent(i){uiTick();closeProject();const a=agents[i];moveCamera(v3(a.x,0,a.z),baseZoom*1.9);showAgent(i);}
 function showHub(){uiTick();const t=S.totals||{};info('调度中台','中台',row('连接',esc(conn.link))+(conn.mode==='live'?row('地址',esc(conn.url)):'')+row('时区',esc(S.timezone||'—'))+row('正在处理',num(t.running))+row('排队',num(t.queued))+row('等重试',num(t.retrying))+row('不确定',num(t.unknown))+row('今日完成',num(t.doneToday))+row('待你拍板',num(t.attention))+'<p>中台按规则把事件派给 Agent，并把卡片送到通道。</p>',showHub);}
 function showRuns(){const all=[...S.runs,...(history?history.runs:[])].filter((r,k,a)=>a.findIndex(q=>q.id===r.id)===k).sort((a,b)=>b.id-a.id),more=history?history.next:(S.hasMore?S.nextBefore:null);
- info('轮次记录','最近的轮次','<div class="sublist">'+(all.length?all.map(r=>'<button data-act="run" data-id="'+esc(r.id)+'">第 '+esc(r.id)+' 轮 · '+esc(r.rule)+'<em>'+esc(stateText(r))+(r.summary?' · '+esc(r.summary):'')+'</em></button>').join(''):'<div>还没有轮次。</div>')+'</div>'+(more&&conn.mode==='live'?'<button class="ghost wide" data-act="more-runs">更早的轮次</button>':''),showRuns);}
+ info('轮次记录','最近的轮次','<div class="sublist">'+(all.length?all.map(r=>'<button data-act="run" data-id="'+esc(r.id)+'">第 '+esc(r.id)+' 轮 · '+esc(r.rule)+'<em>'+esc(stateText(r))+(r.error?' · '+esc(r.error.slice(0,160)):'')+(r.summary?' · '+esc(r.summary):'')+'</em></button>').join(''):'<div>还没有轮次。</div>')+'</div>'+(more&&conn.mode==='live'?'<button class="ghost wide" data-act="more-runs">更早的轮次</button>':''),showRuns);}
+function showTaskAlerts(){listPanel('任务异常','需要关注的执行记录','重试中的记录保留上次错误；待你拍板仅统计尚未回答的卡片。',taskAlerts(S.runs).map(a=>'<button data-act="run" data-id="'+a.id+'"><strong>'+esc(a.rule)+'</strong><em>'+esc(a.label)+'</em><span>'+esc(errorSummary(a.error))+'</span></button>'),showTaskAlerts);}
+$('#task-alerts-open').onclick=showTaskAlerts;
 $('#runs-open').onclick=()=>{uiTick();showRuns();};$('#leave').onclick=leave;
 // ---- 规则文件（需要中台的规则读写接口）
 function openRules(){uiTick();$('#rules-modal').hidden=false;$('#rules-msg').textContent='';const live=conn.mode==='live';$('#rules-text').disabled=!live;['#rules-check','#rules-save','#rule-add'].forEach(q=>$(q).disabled=!live);
