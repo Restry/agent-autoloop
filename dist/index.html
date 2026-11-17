@@ -134,6 +134,7 @@ body[data-mode="snapshot"] #conn::after{content:"只读";margin-left:8px;padding
 <script type="module">
 import {groupTasks,runProgress,evidenceFromFacts,isContinuation} from "./task-progress.js";
 const taskEvidence=new Map(),evidenceStamp=new Map(),evidenceFailures=new Map();let evidenceLoading=false;
+import {openRunOutput} from "./run-output.js";
 import {openArtifacts} from "./artifacts.js";
 import {openReports} from "./reports.js";
 const reportKind=name=>/早报|新闻/.test(name)?"morning":/日报|项目简报/.test(name)?"projects":null;
@@ -849,6 +850,7 @@ let whyOf=0,whyHtml='';
 function showRun(id){const r=findRun(id);if(!r)return closeInfo();const t=tasks.find(q=>q.id===id&&!q.done);inspectedTask=t||null;if(t)focusedTask=t;
  if(whyOf!==id){whyOf=id;whyHtml='';}
  let h='<p>'+esc(r.summary||'这一轮还没有结论。')+'</p>'+row('规则',esc(r.rule))+row('Agent',esc(agentName(r.agent)))+row('状态','<span role="status">'+esc(stateText(r))+'</span>')+row('创建',fmtT(r.createdAt))+row('领取',fmtT(r.claimedAt))+row('结束',fmtT(r.finishedAt));
+ h+='<button class="primary wide" data-run-output="'+esc(r.id)+'">查看完整结果 · Agent 回复全文</button>';
  const group=taskGroups().find(g=>g.runs.some(q=>q.id===r.id));if(group)h+='<button class="ghost wide" data-act="task" data-id="'+esc(group.id)+'">返回同一任务的完整进度</button>';
  h+='<button class="ghost wide" data-artifacts-run="'+r.id+'">交付成果 · 预览与下载</button>';
  h+=reportButton(r.rule);

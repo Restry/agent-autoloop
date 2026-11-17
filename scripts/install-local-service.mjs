@@ -29,6 +29,6 @@ const agents=join(home,'Library/LaunchAgents');await mkdir(agents,{recursive:tru
 const file=join(agents,service+'.plist');await writeFile(file+'.tmp',plist,{mode:0o644});
 execFileSync('plutil',['-lint',file+'.tmp']);await rename(file+'.tmp',file);
 const domain='gui/'+process.getuid();try{execFileSync('launchctl',['bootout',domain+'/'+service],{stdio:'ignore'});}catch{}
-execFileSync('launchctl',['bootstrap',domain,file]);
+let started=false;for(let attempt=0;attempt<20;attempt++){try{execFileSync('launchctl',['bootstrap',domain,file],{stdio:'pipe'});started=true;break;}catch(error){try{execFileSync('launchctl',['print',domain+'/'+service],{stdio:'ignore'});started=true;break;}catch{}if(attempt===19)throw error;await new Promise(r=>setTimeout(r,250));}}if(!started)throw Error('UI service registration failed');
 for(let i=0;i<30;i++){try{const response=await fetch('http://127.0.0.1:8765/api/healthz',{signal:AbortSignal.timeout(1500)});if(response.ok){const status={service,release,url:'http://127.0.0.1:8765/',backend:await response.json()};await writeFile(join(base,'deployment.json'),JSON.stringify(status,null,2)+'\n',{mode:0o600});console.log(JSON.stringify(status));process.exit(0);}}catch{}await new Promise(r=>setTimeout(r,500));}
 throw Error('UI service did not become healthy; inspect '+join(logs,'town-ui-error.log'));
