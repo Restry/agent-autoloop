@@ -16,7 +16,7 @@ PHP 和 TS 后端共用同一个 GemFlow 前端。目标是让 TS 后端兼容�
 | `/Users/louis/projects/GenFlow/GemFlow` | 两条后端共用的前端 | 只读；不修改页面、路由、菜单、文案或前端契约 |
 | `/Users/louis/projects/GenFlow/GemFlow-AI` | 关联仓库 | 仅按用户要求更新代码，不做业务修改 |
 
-用户于 2026-11-16 指定：三个业务仓库都从 `origin/main` 更新；GemFlow-AI 沿用 `origin/main`。保留当前本地分支，只允许快进。更新远端代码与自行改前端业务是两件不同的事。
+用户于 2026-11-16 指定：三个业务仓库都从 `origin/main` 更新；GemFlow-AI 沿用 `origin/main`。保留当前本地工作分支。用户已批准将 origin/main 更新合入工作分支，包括必要的非快进合并；不把工作分支合回 main。更新远端代码与自行改前端业务是两件不同的事。
 
 技能目录：`/Users/louis/projects/GenFlow/.claude/skills/php-ts-sync`。`last-sync.json` 是已验证的同步游标；`prepare-result.json` 是本轮更新检查记录。
 
@@ -30,9 +30,9 @@ PHP 和 TS 后端共用同一个 GemFlow 前端。目标是让 TS 后端兼容�
 node /Users/louis/projects/GenFlow/.claude/skills/php-ts-sync/sync-tools.mjs prepare
 ```
 
-入口先对四个仓库执行 `fetch --prune origin`，再统一检查工作区、分支关系，并用已获取的 `origin/main` 提交号做快进更新。只有状态为 `ready` 才进入业务同步。
+入口先对四个仓库执行 `fetch --prune origin`，再统一检查工作区、分支关系，并用已获取的 `origin/main` 提交号做快进更新。若返回 ready，则进入业务同步；若因已批准处理的分叉或 TS 未提交改动而阻塞，先按下一段落实授权，再重跑 prepare。
 
-存在未提交/未跟踪改动、冲突、分叉、缺少 main 或访问失败时，保留现场，报告具体仓库和阻塞。不得自动 stash、reset、切分支、创建合并提交或提交用户代码。部分仓库已经快进后其他仓库失败，要如实报告，不回滚已完成的安全更新。
+已批准的处理：检查并保留 TS 后端现有改动后，可在当前工作分支 git add 和保存提交；三个业务仓库可 git merge --no-edit origin/main，将 main 更新带入工作分支。冲突按两边已有意图处理，保留本地定制；前端仅允许为接入其主分支处理必要冲突，不另做 TS 专用前端。处理完重跑 prepare，确认 ready 后再做业务移植。不得再次要求批准这些 Git 操作。仍禁止 stash、reset、切到 main、push 或丢弃用户改动；缺少 main、网络故障或无法判断的业务冲突应报告真实原因。
 
 ## 2. 冻结同步范围
 
@@ -64,7 +64,7 @@ node /Users/louis/projects/GenFlow/.claude/skills/php-ts-sync/sync-tools.mjs pre
 node /Users/louis/projects/GenFlow/.claude/skills/php-ts-sync/sync-tools.mjs verify
 ```
 
-- 该入口只在 TS 后端运行现有 `pnpm run verify`，保留真实退出码。权限允许项仅匹配这两个固定入口。
+- 该入口只在 TS 后端运行现有 `pnpm run verify`，保留真实退出码。本地权限同时允许指定仓库的直接 Git 只读查询和已批准的保存/合并操作。命令使用 git -C 加表中绝对路径；不要改写成 rtk、Shell/Python 包装或使用任意工作目录。
 - 遇到权限拒绝，记录工具、目标和原因。不得改用 Python→Shell、编码或其它工具绕过同一拒绝。本轮无法取得必要权限时用 ask 说明最小范围。
 - 重试资料优先读本轮 context 和已授权的上一批次 scratch。其它目录不默认获准；资料缺失不能用猜测填补。
 - `/tmp` 中的旧测试脚本不是稳定依赖。先从仓库中查找现有对照测试入口；不存在就报告缺失或在已授权的 TS 后端测试目录内实现测试。
@@ -82,4 +82,4 @@ node /Users/louis/projects/GenFlow/.claude/skills/php-ts-sync/sync-tools.mjs ver
 
 ## 保留的边界
 
-不打印密码、Token、Cookie 或连接串；不自动 git commit/push；不改 PHP 业务代码、共用前端或 GemFlow-AI 业务代码；不改已有 `database/postgresql/checksums.json` 哈希条目。
+不打印密码、Token、Cookie 或连接串；保存提交和合并按上述既有授权执行；不 git push；不改 PHP 业务代码、共用前端或 GemFlow-AI 业务代码；不改已有 `database/postgresql/checksums.json` 哈希条目。
