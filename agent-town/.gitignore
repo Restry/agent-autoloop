@@ -1,0 +1,5 @@
+checks/evidence/
+integrations/**/*.json
+integrations/**/*.png
+*.log
+.DS_Store

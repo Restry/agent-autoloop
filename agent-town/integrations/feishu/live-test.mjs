@@ -1,0 +1,33 @@
+import {readFileSync,writeFileSync,mkdtempSync,mkdirSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
+import {join,dirname} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {once} from 'node:events';
+const dir=dirname(fileURLToPath(import.meta.url)),settings=JSON.parse(readFileSync(join(dir,'lark-settings.json'),'utf8'));
+if(settings.profile!=='autoloop')throw Error('验收仅允许 autoloop 专用应用');
+const auth=JSON.parse(execFileSync(settings.program,['--profile',settings.profile,'auth','status','--json','--verify'],{encoding:'utf8',env:{...process.env,LARKSUITE_CLI_NO_UPDATE_NOTIFIER:'1',LARKSUITE_CLI_NO_SKILLS_NOTIFIER:'1'}}));
+const recipient=auth.identities?.user?.openId;if(!recipient||!auth.verified)throw Error('需要先完成本人身份授权');
+const staging=join(process.env.HOME,'.agent-autoloop/staging');mkdirSync(staging,{recursive:true,mode:0o700});const home=mkdtempSync(join(staging,'feishu-live-'));
+process.env.AGENT_AUTOLOOP_HOME=home;process.env.AGENT_AUTOLOOP_RULES=join(home,'rules.json');
+writeFileSync(process.env.AGENT_AUTOLOOP_RULES,JSON.stringify({sources:{test:{name:'飞书验收'}},agents:{verification:{name:'确定性验收程序',worker:'verification',use:'command',command:['node','--version']}},channels:{feishu:{name:'飞书验收',answerers:[recipient]}},rules:[{name:'飞书接入验收',when:{source:'test',types:['verify.start']},to:'verification',cwd:home,prompt:'仅验证回答数据，不执行任何业务操作。',channels:['feishu']}]}),{mode:0o600});
+writeFileSync(join(dir,'live-test-runtime.json'),JSON.stringify({prefix:'t'+Date.now().toString(36)+'-',home}),{mode:0o600});
+const hub=await import('/Users/louis/.agent-autoloop/app/host/runtime.ts');
+const {serve}=await import('/Users/louis/.agent-autoloop/app/host/http.ts');
+const {hubClient}=await import('/Users/louis/.agent-autoloop/app/protocol/client.ts');
+const {default:feishu,render}=await import('/Users/louis/.agent-autoloop/app/plugins/feishu/channel.ts');
+const ownerKey=hub.addKey('owner','verification'),channelKey=hub.addKey('channel','feishu');
+const server=serve(0);await once(server,'listening');const url='http://127.0.0.1:'+server.address().port;
+const owner=hubClient(url,ownerKey),channel=hubClient(url,channelKey),stop=new AbortController(),versions=new Map();
+let state={stage:'starting',profile:settings.profile,appId:auth.appId,isolated:true,productionModified:false,pid:process.pid,port:server.address().port},busy=false,finished=false;
+function update(fields){Object.assign(state,fields);writeFileSync(join(dir,'live-test-status.json'),JSON.stringify(state,null,2));console.log(JSON.stringify(fields));}
+const act=(name,...args)=>hub.execute(name,args);
+act('ingest','test',{id:'start',type:'verify.start'});const first=act('claimNext','verification','initial');
+act('finish',first.run,first.token,{outcome:'done',summary:'等待本人点击验收卡片',ask:[{key:'verify',title:'Agent 小镇：飞书接入验收',text:'**请点击“确认收到”完成联通测试。**\n本卡片只验证发送、点击回传和测试任务续办，不执行项目操作。',options:['确认收到','稍后再测'],recommend:1}]});
+const initial=await owner.state(),card=initial.cards[0];if(!card)throw Error('测试卡片没有生成');
+const payload=render(card);if(payload.schema!=='2.0'||payload.body.elements.length<2||payload.body.elements.length>5)throw Error('卡片结构不符合验收要求');
+writeFileSync(join(dir,'test-card.json'),JSON.stringify(payload,null,2));update({stage:'sending',cardId:card.id,initialRun:first.run,cardAudit:{version:'2.0',blocks:payload.body.elements.length,callbackOptions:2,recipient:'本人',productionActions:0}});
+const observed={...channel,delivered:async(id,version,ref)=>{const result=await channel.delivered(id,version,ref);versions.set(id,version);update({stage:state.continuationRun?'updated':'awaiting_click',messageId:ref,deliveredVersion:version});return result;},failed:async(id,version,error)=>{update({stage:'delivery_failed',error});return channel.failed(id,version,error);}};
+const running=feishu({hub:observed,options:{user:recipient,lark:join(dir,'lark-test.mjs')},signal:stop.signal,log:line=>{if(line.includes('[event] ready'))update({listenerReady:true});console.log('[feishu-test] '+line);}}).catch(e=>{if(!stop.signal.aborted)update({stage:'error',error:e.message});});
+async function finish(){if(finished)return;finished=true;clearInterval(poll);stop.abort();server.closeAllConnections();server.close();await running;setTimeout(()=>process.exit(0),100);}
+const poll=setInterval(async()=>{if(busy||finished)return;busy=true;try{const s=await owner.state(),c=[...s.cards,...s.recentCards].find(c=>c.id===card.id);if(c?.state==='decided'&&!state.continuationRun){const job=act('claimNext','verification','continuation');if(!job)throw Error('收到回答后未生成续办轮次');const answer=job.context.answers.find(a=>a.card===card.id);if(!answer||answer.by!==recipient)throw Error('续办任务未收到本人的回答');update({stage:'continuing',continuationRun:job.run,choice:answer.chosen||answer.text,answerReceived:true});act('finish',job.run,job.token,{outcome:'done',summary:'验收通过：飞书点击已回到 AutoLoop，测试任务已继续完成。未执行项目操作。'});}if(c?.state==='done'&&state.continuationRun&&(versions.get(card.id)||0)>=c.version){update({stage:'passed',finishedAt:new Date().toISOString(),cardUpdated:true});await finish();}}catch(e){if(!stop.signal.aborted)update({stage:'error',error:e.message});}finally{busy=false;}},1000);
+process.on('SIGTERM',()=>{update({stage:'stopped'});void finish();});process.on('SIGINT',()=>{update({stage:'stopped'});void finish();});

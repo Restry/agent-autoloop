@@ -1,0 +1,45 @@
+--- a/plugins/claude/agent.ts
++++ b/plugins/claude/agent.ts
+@@ -1,7 +1,7 @@
+ // Claude Code: the user's own, installed and signed in by them. This only ever runs the official program.
+ import { execFileSync } from "node:child_process";
+ import { commandLine } from "../../host/command.ts";
+-import { existsSync, readdirSync } from "node:fs";
++import { existsSync, readdirSync, lstatSync, realpathSync } from "node:fs";
+ import { homedir } from "node:os";
+ import path from "node:path";
+ import { findProgram, tail, type Adapter } from "../../worker/agents.ts";
+@@ -25,6 +25,25 @@
+   });
+ }
+ 
++/** Only prior attempts of this run may supply scratch handoff notes. */
++export function retryScratchFolders(folder: string): string[] {
++  const current = /^(\d+)-(\d+)$/.exec(path.basename(folder));
++  const parent = path.dirname(folder);
++  if (!current || path.basename(parent) !== "runs" || !existsSync(parent)) return [];
++  const root = realpathSync(parent);
++  return readdirSync(parent).flatMap((name) => {
++    const prior = /^(\d+)-(\d+)$/.exec(name);
++    if (!prior || prior[1] !== current[1] || Number(prior[2]) >= Number(current[2])) return [];
++    const scratch = path.join(parent, name, "scratch");
++    try {
++      const info = lstatSync(scratch);
++      return info.isDirectory() && !info.isSymbolicLink() && realpathSync(scratch).startsWith(root + path.sep)
++        ? [scratch]
++        : [];
++    } catch { return []; }
++  });
++}
++
+ export default {
+   command: (turn) => [
+     turn.program ?? findProgram("claude", inTheApp),
+@@ -41,6 +60,7 @@
+     PERMISSIONS[turn.access],
+     "--add-dir",
+     turn.folder,
++    ...retryScratchFolders(turn.folder).flatMap((folder) => ["--add-dir", folder]),
+     // Entering a worktree moves the whole transcript under the worktree's project folder (still so on 2.1.317): --resume
+     // finds it, but the desktop app, opening the session link from the run's folder, showed only its first message.
+     "--disallowedTools=EnterWorktree,ExitWorktree",

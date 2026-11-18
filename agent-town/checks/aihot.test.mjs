@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {collectAihot,AIHOT_URL} from '../integrations/project-tasks/collect-aihot.mjs';
+import {reportName} from '../integrations/project-tasks/collect-brief.mjs';
+const data={query:{ordering:'timelineDesc'},items:[{title:'示例',links:{aihot:'https://aihot.news/items/example'},publishedAt:null,discoveredAt:'2026-11-16T01:00:00Z'}],page:{hasMore:false}};
+let calls=0,waits=[];
+const result=await collectAihot({skillDir:'/nonexistent',wait:async n=>waits.push(n),fetcher:async(url,opts)=>{assert.equal(url,AIHOT_URL);assert.equal(opts.method,'GET');assert.equal(opts.redirect,'error');assert(!opts.headers.authorization);calls++;return calls===1?new Response('',{status:429,headers:{'retry-after':'2'}}):Response.json(data);}});
+assert.equal(calls,2);assert.deepEqual(waits,[2000]);assert.equal(result.provider,'AIHOT');assert.equal(result.articles[0].publishedAt,null);
+assert.equal((await collectAihot({fetcher:async()=>Response.json({...data,items:[]})})).articles.length,0);
+await assert.rejects(collectAihot({wait:async()=>{},fetcher:async()=>new Response('',{status:503})}),/AIHOT/);
+await assert.rejects(collectAihot({fetcher:async()=>Response.json({items:[{links:{aihot:'https://example.org'}}]})}),/链接/);
+assert.equal(reportName('morning','2026-11-16'),'2026-11-16-aihot.md');assert.equal(reportName('projects','2026-11-16'),'2026-11-16.md');
+console.log('AIHOT: GET-only, retries, empty data, failure, link validation and independent report identity passed');

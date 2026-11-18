@@ -1,0 +1,38 @@
+// Enable only the verified, dedicated Feishu channel. Never print credentials.
+import {readFileSync,writeFileSync,mkdirSync,renameSync,copyFileSync,chmodSync,existsSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
+import {join,dirname} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {createHash} from 'node:crypto';
+const dir=dirname(fileURLToPath(import.meta.url)),home=join(process.env.HOME,'.agent-autoloop');
+const verified=JSON.parse(readFileSync(join(dir,'live-test-status.json'),'utf8'));
+if(verified.stage!=='passed'||!verified.answerReceived||!verified.cardUpdated)throw Error('真实卡片链路尚未通过，不能启用正式通道');
+const settings=JSON.parse(readFileSync(join(dir,'lark-settings.json'),'utf8'));
+if(settings.profile!=='autoloop')throw Error('必须使用 autoloop 专用配置');
+const env={...process.env,AGENT_AUTOLOOP_HOME:home,LARKSUITE_CLI_NO_UPDATE_NOTIFIER:'1',LARKSUITE_CLI_NO_SKILLS_NOTIFIER:'1'};
+const auth=JSON.parse(execFileSync(settings.program,['--profile','autoloop','auth','status','--json','--verify'],{encoding:'utf8',env}));
+const user=auth.identities?.user?.openId;
+if(!auth.verified||!user||auth.appId!==verified.appId)throw Error('专用应用或本人身份与验收记录不一致');
+const bus=JSON.parse(execFileSync(settings.program,['--profile','autoloop','event','status','--current','--json'],{encoding:'utf8',env}));
+if((bus.apps||[]).some(a=>(a.consumers||[]).some(c=>c.event_key==='card.action.trigger')))throw Error('卡片回调仍有消费者，不能启动重复监听');
+const configFile=join(home,'config.json'),rulesFile=join(home,'rules.json');
+const configRaw=readFileSync(configFile,'utf8'),rulesRaw=readFileSync(rulesFile,'utf8'),config=JSON.parse(configRaw),rules=JSON.parse(rulesRaw);
+if(config.channels?.feishu||rules.channels?.feishu)throw Error('已有飞书配置，请检查后续接，不能覆盖');
+const keys=execFileSync('agent-autoloop',['key','list'],{encoding:'utf8',env});
+if(keys.split('\n').some(line=>/^channel\s+feishu\s/.test(line)))throw Error('已有飞书通道密钥，不能自动轮换');
+const stamp=new Date().toISOString().replace(/[:.]/g,'-'),backup=join(home,'backups','before-feishu-'+stamp);
+execFileSync('agent-autoloop',['backup',backup],{stdio:'pipe',env});
+const runtime=join(home,'integrations','feishu');mkdirSync(runtime,{recursive:true,mode:0o700});
+for(const name of ['lark-profile.mjs','lark-settings.json']){copyFileSync(join(dir,name),join(runtime,name));chmodSync(join(runtime,name),name.endsWith('.mjs')?0o700:0o600);}
+const draft={...rules,channels:{...rules.channels,feishu:{name:'飞书',answerers:[user]}}};
+const draftFile=join(runtime,'rules.next.json');writeFileSync(draftFile,JSON.stringify(draft,null,2)+'\n',{mode:0o600});
+execFileSync('agent-autoloop',['check',draftFile],{stdio:'pipe',env});
+if(readFileSync(configFile,'utf8')!==configRaw||readFileSync(rulesFile,'utf8')!==rulesRaw)throw Error('配置已被其他进程更新，请重新准备');
+const secret=execFileSync('agent-autoloop',['key','new','channel','feishu'],{encoding:'utf8',env}).trim();
+if(!secret||secret.includes('\n'))throw Error('通道密钥返回格式异常');
+const next={...config,channels:{...config.channels,feishu:{use:'feishu',key:secret,user,lark:join(runtime,'lark-profile.mjs')}}};
+const configNext=join(home,'config.feishu-next.json');writeFileSync(configNext,JSON.stringify(next,null,2)+'\n',{mode:0o600});renameSync(configNext,configFile);renameSync(draftFile,rulesFile);chmodSync(rulesFile,0o600);
+const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const result={activatedAt:new Date().toISOString(),profile:'autoloop',appId:auth.appId,backup,runtime,ruleDefinitionsUnchanged:hash(rules.rules)===hash(draft.rules),groups:rules.rules.map(r=>({name:r.name,group:r.group||r.name})),desktopRetained:!!next.channels.desktop,configWritten:true,serviceReloaded:false};
+writeFileSync(join(dir,'activation-result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify({...result,groups:result.groups.map(x=>x.group)}));
+execFileSync('agent-autoloop',['service','install'],{stdio:'pipe',env,timeout:60000});result.serviceReloaded=true;writeFileSync(join(dir,'activation-result.json'),JSON.stringify(result,null,2));console.log('中台已按正式配置重载，正在检查在线状态。');
