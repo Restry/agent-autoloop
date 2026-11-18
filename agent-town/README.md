@@ -2,15 +2,18 @@
 
 Three.js 小镇已接入本机 Agent Auto Loop 中台，保留现有别墅、院落、传送带和工作站的设计。实体数量完全来自 AutoLoop 快照，没有预设项目或空工作站。
 
-## 启动
+## 本机运行与开发
+
+本机常驻页面由 launchd 从 `~/.agent-autoloop/town-ui/releases/` 启动，访问 http://127.0.0.1:8765/ 。中台监听 `127.0.0.1:3350`，服务端从 `~/.agent-autoloop/config.json` 读取访问配置。
+
+在开发目录启动隔离预览：
 
 ```sh
-cd /Users/louis/Documents/Codex/2026-11-15/new-chat/outputs/agent-town
-node server.mjs
+cd ~/projects/agent-autoloop/agent-town
+node checks/serve-fixture.mjs
 ```
 
-打开 http://127.0.0.1:8765/ 。不要再用 Python 静态服务器，它不能转发接口。
-服务只监听 `127.0.0.1`。默认后端是 `127.0.0.1:3350`，服务端读取 `~/.agent-autoloop/config.json` 的 owner；浏览器和静态目录不保存密钥。未设置系统自动启动。
+预览地址是 http://127.0.0.1:18768/ 。安装与发布步骤见 [本机界面服务](integrations/LOCAL_UI_SERVICE.md)。
 
 ## 后端实体与场景
 

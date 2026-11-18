@@ -4,9 +4,10 @@ Agent 小镇网页与同源代理使用 8765，Autoloop 后端使用 3350，两�
 
 2026-11-16 连接故障：3350 健康且仍运行 d783b97，8765 没有监听进程。旧网页服务由临时终端启动，没有系统托管，退出后不会自动恢复。已改用当前用户的 launchd 服务 cn.restry.agent-town。
 
-部署命令（在本仓库执行）：
+从小镇开发目录执行部署命令。
 
 ```sh
+cd ~/projects/agent-autoloop/agent-town
 node scripts/install-local-service.mjs
 ```
 
