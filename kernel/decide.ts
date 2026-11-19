@@ -7,6 +7,7 @@ import { AuthError, Conflict, InputError, NotFound } from "./errors.ts";
 import { iso, rows, type Change, type Fact, type Row, type Table, type View } from "./evolve.ts";
 import {
   agentsOf,
+  askedAbout,
   cardView,
   configuration,
   eventsOf,
@@ -439,6 +440,9 @@ function scheduleReview(draft: Draft, run: Row, later: Later) {
     session,
     agent: run.agent,
     hops: hopsOf(draft, run),
+    // Written now, like `hops`: the row names no run for a later round to follow back from, and it is removed when the
+    // round it wakes ends, so the ids are recorded while the round that set the check is still here.
+    events: JSON.stringify(askedAbout(draft.view, run.id)),
   };
   if (existing) return void put(draft, "timers", existing.id, fields);
   const source = sourceOf(draft.view, run.id) ?? SCHEDULE;
@@ -613,6 +617,9 @@ function tick(draft: Draft) {
     const rule = ruleNamed(draft, timer.rule);
     const event = { id: `timer:${timer.id}`, type: "timer.due", subject: timer.lane, hops: timer.hops ?? 0 };
     const eventId = recordEvent(draft, timer.source, event, rule ? [rule.name] : []);
+    // The row these were written on is removed once the round this wakes ends, and an answer can wake a round after that:
+    // they travel with the event itself, which every later reader already has (#338).
+    if (timer.events) put(draft, "events", eventId, { events: timer.events });
     if (rule) {
       put(draft, "timers", timer.id, { event_id: eventId });
       enqueue(draft, rule, eventId, timer.lane, timer.agent === rule.to ? timer.session : null);
