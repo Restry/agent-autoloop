@@ -400,6 +400,22 @@ async function join(args: string[]) {
   const name = text(named.worker);
   const key = text(named.key);
   if (!url || !name || !key) return fail(TAKES.join.usage);
+  const badAddress = "中台地址要写完整的 http:// 或 https:// 地址，不能带账号、查询参数或片段";
+  let address: URL;
+  try {
+    address = new URL(url);
+  } catch {
+    return fail(badAddress);
+  }
+  if (
+    !["http:", "https:"].includes(address.protocol) ||
+    address.username ||
+    address.password ||
+    address.search ||
+    address.hash
+  ) {
+    return fail(badAddress);
+  }
   // Joining another hub must not silently replace this machine's existing hub, worker or owner keys.
   if (existsSync(CONFIG_FILE)) {
     return fail(`已经配置过了：${CONFIG_FILE}。为防止覆盖现有设置，请先备份并手动修改配置。`);
